@@ -190,71 +190,70 @@ app.layout = html.Div([
 
     # Filters
     html.Div([
-        html.Label("Year:", style={"fontFamily": "Arial", "alignSelf": "center"}),
-        dcc.Dropdown(
-            id="year",
-            options=[{"label": str(y), "value": int(y)} for y in sorted(df["year"].dropna().unique())],
-            value=[int(df["year"].max())],
-            multi=True,
-            style={"width": "150px", "fontFamily": "Arial"}
-        ),
+        # Erste Reihe: Dropdowns
+        html.Div([
+            html.Label("Year:", style={"fontFamily": "Arial", "alignSelf": "center"}),
+            dcc.Dropdown(
+                id="year",
+                options=[{"label": str(y), "value": int(y)} for y in sorted(df["year"].dropna().unique())],
+                value=[int(df["year"].max())],
+                multi=True,
+                style={"width": "150px", "fontFamily": "Arial"}
+            ),
 
-        html.Label("Country:", style={"fontFamily": "Arial", "alignSelf": "center"}),
-        dcc.Dropdown(
-            id="country",
-            options=[{"label": l, "value": l} for l in sorted(df["country_en"].unique())],
-            multi=True,
-            style={"width": "250px", "fontFamily": "Arial"}
-        ),
+            html.Label("Country:", style={"fontFamily": "Arial", "alignSelf": "center"}),
+            dcc.Dropdown(
+                id="country",
+                options=[{"label": l, "value": l} for l in sorted(df["country_en"].unique())],
+                multi=True,
+                style={"width": "250px", "fontFamily": "Arial"}
+            ),
 
-        html.Label("Product:", style={"fontFamily": "Arial", "alignSelf": "center"}),
-        dcc.Dropdown(
-            id="product",
-            options=[{"label": p, "value": p} for p in sorted(df["HS6_Description"].unique())],
-            multi=True,
-            style={"flex": "1", "fontFamily": "Arial"}
-        ),
+            html.Label("Product:", style={"fontFamily": "Arial", "alignSelf": "center"}),
+            dcc.Dropdown(
+                id="product",
+                options=[{"label": p, "value": p} for p in sorted(df["HS6_Description"].unique())],
+                multi=True,
+                style={"flex": "1", "fontFamily": "Arial"}
+            ),
 
-        html.Label("HS-Level:", style={"fontFamily": "Arial", "alignSelf": "center"}), 
-        dcc.Dropdown(
-            id="hs_level",
-            options=[
-                {"label": "HS2", "value": "HS2_Description"},
-                {"label": "HS4", "value": "HS4_Description"},
-                {"label": "HS6", "value": "HS6_Description"},
-                {"label": "HS8", "value": "HS8_Description"}
-            ],
-            value="HS2_Description",
-            clearable=False,
-            style={"width": "180px", "fontFamily": "Arial"}
-        ),
-        html.Label("Min. CHF:", style={"fontFamily": "Arial", "alignSelf": "center"}),
-        dcc.Slider(
-            id="chf_slider",
-            min=0,
-            max=10_000_000_000,   # 👉 Obergrenze anpassen (z. B. 1 Mio)
-            step=100_000,     # 👉 Schrittweite
-            value=0,    # 👉 Standardwert
-            marks={
-                0: "0",
-                100_000: "100k",
-                500_000: "500k",
-                1_000_000: "1M",
-                100_000_000: "100M",
-                1_000_000_000: "1bn",
-                10_000_000_000: "10bn"
-            },
-            tooltip={"placement": "bottom", "always_visible": True},
-            updatemode="mouseup"   # erst filtern, wenn Slider losgelassen wird
-        ),
+            html.Label("HS-Level:", style={"fontFamily": "Arial", "alignSelf": "center"}), 
+            dcc.Dropdown(
+                id="hs_level",
+                options=[
+                    {"label": "HS2", "value": "HS2_Description"},
+                    {"label": "HS4", "value": "HS4_Description"},
+                    {"label": "HS6", "value": "HS6_Description"},
+                    {"label": "HS8", "value": "HS8_Description"}
+                ],
+                value="HS2_Description",
+                clearable=False,
+                style={"width": "180px", "fontFamily": "Arial"}
+            )
+        ], style={"display": "flex", "gap": "20px", "marginBottom": "20px"}),
 
-    ], style={
-        "display": "flex",
-        "gap": "20px",
-        "marginBottom": "20px",
-        "fontFamily": "Arial",
-        "alignItems": "center"
-    }),
+        # Zweite Reihe: Slider auf voller Breite
+        html.Div([
+            html.Label("Min. CHF:", style={"fontFamily": "Arial", "marginBottom": "10px"}),
+            dcc.Slider(
+                id="chf_slider",
+                min=0,
+                max=1_000_000_000,
+                step=1_000_000,
+                value=0,    
+                marks={
+                    0: "0",
+                    1_000_000_000: "1Bn"
+                },
+                tooltip={"placement": "bottom", "always_visible": True},
+                updatemode="mouseup"
+            )
+        ], style={
+            "width": "100%",
+            "padding": "0 40px",
+            "marginBottom": "30px"
+        })
+    ]),
 
     # KPIs
     html.Div(id="kpis", style={
@@ -323,22 +322,23 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
         html.Div([
             html.Div(f"Exports " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
             html.Div(f"CHF {exp_sum:,.0f}".replace(",", "'"), style={"fontSize": "26px", "fontWeight": "bold"})
-        ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_export"]}),
+        ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_export"],
+              "backgroundColor": "#fdecea"}),
 
         html.Div([
             html.Div("Imports " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
             html.Div(f"CHF {imp_sum:,.0f}".replace(",", "'"), style={"fontSize": "26px", "fontWeight": "bold"})
-        ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_import"]}),
+        ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_import"],"backgroundColor": "#e8f5e9"}),
 
         html.Div([
             html.Div("Balance " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
             html.Div(f"CHF {balance:,.0f}".replace(",", "'"), style={"fontSize": "26px", "fontWeight": "bold"})
-        ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_trade"]}),
+        ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_trade"],"backgroundColor": "#e3f2fd"}),
 
         html.Div([
             html.Div("Volume " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
             html.Div(f"CHF {volume:,.0f}".replace(",", "'"), style={"fontSize": "26px", "fontWeight": "bold"})
-        ], style={**GRAPH_STYLE["kpi_card"], "color": "black"})
+        ], style={**GRAPH_STYLE["kpi_card"], "color": "black", "backgroundColor": "#f5f5f5"})
     ], style={
         "display": "flex", 
         "gap": "25px", 
@@ -439,90 +439,102 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
 
 
     elif tab == "trend_hs":
-        # Letzte 5 Jahre
+        # Letzte 5 Jahre auswählen
         max_year = dff["year"].max()
         last_years = list(range(max_year - 5, max_year + 1))
         dff_6 = dff[dff["year"].isin(last_years)].copy()
 
-        # Gruppierung nach HS-Level
-        trend_hs = dff_6.groupby(["year", hs_level, "Flow"])["chf_num"].sum().reset_index()
-        trend_hs["hs_hover"] = trend_hs[hs_level].apply(lambda x: wrap_text(x, width=35))
-        trend_hs["hs_legend"] = trend_hs[hs_level].apply(lambda x: wrap_text(x, width=100))
+        # Gruppierung nach tn_key (stabil) + Flow
+        trend_hs = (
+            dff_6.groupby(["year", "tn_key", hs_level, "Flow"])["chf_num"]
+            .sum()
+            .reset_index()
+        )
 
-        # Top 15 Kategorien nach Gesamtvolumen (Export + Import zusammen)
-        totals = trend_hs.groupby(hs_level)["chf_num"].sum().reset_index()
-        top15 = totals.sort_values("chf_num", ascending=False).head(15)[hs_level]
-        trend_hs = trend_hs[trend_hs[hs_level].isin(top15)]
+        # Einheitliche Beschriftung pro tn_key (erste vorkommende Description nehmen)
+        label_map = (
+            trend_hs.groupby("tn_key")[hs_level].first().to_dict()
+        )
+        trend_hs["hs_label"] = trend_hs["tn_key"].map(label_map)
 
-        # Exporte
+        # Wrapping für bessere Lesbarkeit
+        trend_hs["hs_label_wrapped"] = trend_hs["hs_label"].apply(lambda x: wrap_text(x, width=35))
+
+        # Customdata für Hover (tn_key + wrapped label)
+        trend_hs["customdata"] = list(zip(trend_hs["tn_key"], trend_hs["hs_label_wrapped"]))
+
+        # Top 15 Kategorien nach Gesamtvolumen
+        totals = trend_hs.groupby("tn_key")["chf_num"].sum().reset_index()
+        top15 = totals.sort_values("chf_num", ascending=False).head(15)["tn_key"]
+        trend_hs = trend_hs[trend_hs["tn_key"].isin(top15)]
+
+        # -------------------- Exporte --------------------
         df_exp = trend_hs[trend_hs["Flow"] == "Export"]
         fig_exp = px.line(
             df_exp,
             x="year", y="chf_num",
-            color="hs_legend",
-            line_group=hs_level,
+            color="hs_label_wrapped",   # Wrapped für Legende
+            line_group="tn_key",        # Stabilisierung pro Produkt
             markers=True,
+            custom_data=["tn_key", "hs_label_wrapped"],
             title=f"📈 Export Trend by {hs_level.replace('_Description','')} (Top 15, {min(last_years)}–{max_year})",
             template=GRAPH_STYLE["template"]
         )
         fig_exp.update_traces(
-                mode="lines+markers",
-                hovertemplate=HOVERTEXTS["year_product"],
-                marker=dict(size=16),
-                customdata=trend_hs[["hs_hover"]].values
-            )
-
-        fig_exp.update_layout(
-            hoverlabel=dict(
-                align="left"
+            mode="lines+markers",
+            marker=dict(size=12),
+            hovertemplate=(
+                "<b>Year:</b> %{x}<br>"
+                "<b>CHF:</b> %{y:,.0f}<br>"
+                "<b>tn_key:</b> %{customdata[0]}<br>"
+                "<b>Description:</b> %{customdata[1]}<extra></extra>"
             )
         )
-
+        fig_exp.update_layout(hoverlabel=dict(align="left"))
         fig_exp = apply_standard_layout(
-            fig_exp, 
-            "Year", "CHF", 
-            legend="bottom_outside", 
-            height=900,
+            fig_exp, "Year", "CHF",
+            legend="bottom_outside", height=900,
             legend_title=f"Legend ({hs_level.replace('_Description','')})"
         )
 
-        # Importe
+        # -------------------- Importe --------------------
         df_imp = trend_hs[trend_hs["Flow"] == "Import"]
         fig_imp = px.line(
             df_imp,
             x="year", y="chf_num",
-            color="hs_legend",
-            line_group=hs_level,
-            markers=True,    
-            title=f"📈 Import Trend by {hs_level.replace('_Description','')} (Top 10, {min(last_years)}–{max_year})",
+            color="hs_label_wrapped",
+            line_group="tn_key",
+            markers=True,
+            custom_data=["tn_key", "hs_label_wrapped"],
+            title=f"📈 Import Trend by {hs_level.replace('_Description','')} (Top 15, {min(last_years)}–{max_year})",
             template=GRAPH_STYLE["template"]
         )
-        fig_imp.update_traces( 
+        fig_imp.update_traces(
             mode="lines+markers",
-            hovertemplate=HOVERTEXTS["year_product"],
-            marker=dict(size=16),
-            customdata=trend_hs[["hs_hover"]].values
-        )
-
-        fig_imp.update_layout(
-            hoverlabel=dict(
-                align="left"
+            marker=dict(size=12),
+            hovertemplate=(
+                "<b>Year:</b> %{x}<br>"
+                "<b>CHF:</b> %{y:,.0f}<br>"
+                "<b>tn_key:</b> %{customdata[0]}<br>"
+                "<b>Description:</b> %{customdata[1]}<extra></extra>"
             )
         )
-
+        fig_imp.update_layout(hoverlabel=dict(align="left"))
         fig_imp = apply_standard_layout(
-            fig_imp, 
-            "Year", "CHF", 
-            legend="bottom_outside", 
-            height=900,
+            fig_imp, "Year", "CHF",
+            legend="bottom_outside", height=900,
             legend_title=f"Legend ({hs_level.replace('_Description','')})"
         )
 
-        # Layout nebeneinander
+        # -------------------- Layout nebeneinander --------------------
         content = html.Div([
-            html.Div(dcc.Graph(id="trend_hs_exp",figure=fig_exp), style={"flex": "1"}),
-            html.Div(dcc.Graph(id="trend_hs_imp",figure=fig_imp), style={"flex": "1"})
-        ], style={"display": "flex", "gap": "20px", "padding": "100px"})
+            html.Div(dcc.Graph(id="trend_hs_exp", figure=fig_exp), style={"flex": "1"}),
+            html.Div(dcc.Graph(id="trend_hs_imp", figure=fig_imp), style={"flex": "1"})
+        ], style={"display": "flex", "gap": "20px", "padding": "50px"})
+
+
+
+
 
     elif tab == "country":
         country_ranking = (
@@ -679,40 +691,51 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
         )
 
     elif tab == "treemap_hs":
-
-        # Nur Werte > 0
         treemap_data = (
             dff_year.groupby(["Flow", "country_en", "HS6_Description"])["chf_num"]
             .sum()
             .reset_index()
         )
 
-        # Top 15 Länder nach Handelsvolumen
+        # Top 15 Länder
         top_countries = (
             treemap_data.groupby("country_en")["chf_num"].sum().reset_index()
             .sort_values("chf_num", ascending=False)
             .head(15)["country_en"]
         )
-        treemap_data = treemap_data[treemap_data["country_en"].isin(top_countries)].copy()
+        treemap_data = treemap_data[treemap_data["country_en"].isin(top_countries)]
 
-        # HS6-Namen umbrechen (statt kürzen)
-        treemap_data["HS6_wrapped"] = treemap_data["HS6_Description"].apply(lambda t: wrap_text(t, width=40))
+        # Pro Land+Flow: bestes Produkt + Rest
+        frames = []
+        for (flow, country), group in treemap_data.groupby(["Flow", "country_en"]):
+            if group.empty:
+                continue
+            best = group.nlargest(1, "chf_num")
+            rest_sum = group["chf_num"].sum() - best["chf_num"].iloc[0]
+            rest = pd.DataFrame([{
+                "Flow": flow,
+                "country_en": country,
+                "HS6_Description": "Other products",
+                "chf_num": rest_sum
+            }])
+            frames.append(pd.concat([best, rest], ignore_index=True))
+
+        treemap_top = pd.concat(frames, ignore_index=True)
+
+        # Wrap Text
+        treemap_top["HS6_wrapped"] = treemap_top["HS6_Description"].apply(lambda t: wrap_text(t, width=40))
 
         fig = px.treemap(
-            treemap_data,
-            path=["Flow", "country_en", "HS6_wrapped"],  # 👉 Flow → Land → HS6
+            treemap_top,
+            path=["Flow", "country_en", "HS6_wrapped"],
             values="chf_num",
             color="Flow",
-            color_discrete_map={
-                "Export": GRAPH_STYLE["color_export"],
-                "Import": GRAPH_STYLE["color_import"]
-            },
-            title="📂 Treemap: Länder → HS6 (Top 15 Länder)"
+            color_discrete_map={"Export": GRAPH_STYLE["color_export"], "Import": GRAPH_STYLE["color_import"]},
+            title="📂 Treemap: Top Produkt + Rest pro Land"
         )
 
-        # Hovertexte für beide Flows
         fig.update_traces(
-            customdata=treemap_data[["Flow", "country_en"]].values,
+            customdata=treemap_top[["Flow", "country_en"]].values,
             hovertemplate=(
                 "<b>Flow:</b> %{customdata[0]}<br>"
                 "<b>Land:</b> %{customdata[1]}<br>"
@@ -721,14 +744,11 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
             )
         )
 
-        # Layout
-        fig.update_layout(
-            uniformtext=dict(minsize=14, mode="show"),
-            hoverlabel=dict(align="left")  # 👉 linksbündige Hovertexte
-        )
-
+        fig.update_layout(uniformtext=dict(minsize=14, mode="show"), hoverlabel=dict(align="left"))
         fig = apply_standard_layout(fig, legend=True, height=900)
         content = dcc.Graph(figure=fig, style={"height": "100vh"})
+
+
 
 
     return kpis, content
