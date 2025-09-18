@@ -99,6 +99,16 @@ def wrap_text(s, width=30):
         return ""
     return "<br>".join(textwrap.wrap(str(s), width=width))
 
+def wrap_and_shorten(text, wrap_width=30, max_len=60):
+    if not isinstance(text, str):
+        return ""
+    # Zuerst kürzen, falls zu lang
+    if len(text) > max_len:
+        text = text[:max_len] + "…"
+    # Danach umbrechen
+    return "<br>".join(textwrap.wrap(text, width=wrap_width))
+
+
 def human_format(num: float) -> str:
     """Zahlen im Stil 1.2 M, 3.4 Bn, etc. formatieren."""
     if num is None or pd.isna(num):
@@ -247,7 +257,8 @@ app.layout = html.Div([
                 },
                 tooltip={"placement": "bottom", "always_visible": True},
                 updatemode="mouseup"
-            )
+            ),
+
         ], style={
             "width": "100%",
             "padding": "0 40px",
@@ -268,6 +279,7 @@ app.layout = html.Div([
     dcc.Tab(label="📈 Trade Volume by Year", value="trend", style={"fontFamily": "Arial"}),
     dcc.Tab(label="🌍 Trade by Country", value="country", style={"fontFamily": "Arial"}),
     dcc.Tab(label="📦 Trade by Product", value="product", style={"fontFamily": "Arial"}),
+    dcc.Tab(label="📦 Top Products per Country 🌍", value="country_products", style={"fontFamily": "Arial"}),
     dcc.Tab(label="📈 Trade Trend per Product", value="trend_hs", style={"fontFamily": "Arial"}),
     dcc.Tab(label="📂 Treemap", value="treemap_hs", style={"fontFamily": "Arial"})
     ],
@@ -296,7 +308,7 @@ app.layout = html.Div([
      Input("country", "value"),
      Input("product", "value"),
      Input("hs_level", "value"),
-     Input("chf_slider", "value"),   # NEU
+     Input("chf_slider", "value"),
      Input("tabs", "value")]
 )
 def update_dashboard(year, country, product, hs_level, chf_min, tab):
@@ -305,14 +317,11 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
         dff = dff[dff["country_en"].isin(country)]
     if product:
         dff = dff[dff["HS6_Description"].isin(product)]
-    dff = dff[dff["chf_num"] > 0]
-    
-    # 👉 Mindestwert-Filter anwenden
     dff = dff[dff["chf_num"] >= chf_min]
-    
+
     dff_year = dff[dff["year"].isin(year)].copy()
 
-    # KPIs
+    # ================= KPIs =================
     exp_sum = dff_year.loc[dff_year["Flow"] == "Export", "chf_num"].sum()
     imp_sum = dff_year.loc[dff_year["Flow"] == "Import", "chf_num"].sum()
     balance, volume = exp_sum - imp_sum, exp_sum + imp_sum
@@ -320,31 +329,36 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
 
     kpis = html.Div([
         html.Div([
-            html.Div(f"Exports " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
-            html.Div(f"CHF {exp_sum:,.0f}".replace(",", "'"), style={"fontSize": "26px", "fontWeight": "bold"})
+            html.Div("Exports " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
+            html.Div(f"CHF {exp_sum:,.0f}".replace(",", "'"),
+                     style={"fontSize": "26px", "fontWeight": "bold"})
         ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_export"],
-              "backgroundColor": "#fdecea"}),
+                  "backgroundColor": "#fdecea"}),
 
         html.Div([
             html.Div("Imports " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
-            html.Div(f"CHF {imp_sum:,.0f}".replace(",", "'"), style={"fontSize": "26px", "fontWeight": "bold"})
-        ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_import"],"backgroundColor": "#e8f5e9"}),
+            html.Div(f"CHF {imp_sum:,.0f}".replace(",", "'"),
+                     style={"fontSize": "26px", "fontWeight": "bold"})
+        ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_import"],
+                  "backgroundColor": "#e8f5e9"}),
 
         html.Div([
             html.Div("Balance " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
-            html.Div(f"CHF {balance:,.0f}".replace(",", "'"), style={"fontSize": "26px", "fontWeight": "bold"})
-        ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_trade"],"backgroundColor": "#e3f2fd"}),
+            html.Div(f"CHF {balance:,.0f}".replace(",", "'"),
+                     style={"fontSize": "26px", "fontWeight": "bold"})
+        ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_trade"],
+                  "backgroundColor": "#e3f2fd"}),
 
         html.Div([
             html.Div("Volume " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
-            html.Div(f"CHF {volume:,.0f}".replace(",", "'"), style={"fontSize": "26px", "fontWeight": "bold"})
-        ], style={**GRAPH_STYLE["kpi_card"], "color": "black", "backgroundColor": "#f5f5f5"})
-    ], style={
-        "display": "flex", 
-        "gap": "25px", 
-        "padding": "25px",
-        "justifyContent": "space-evenly"
-    })
+            html.Div(f"CHF {volume:,.0f}".replace(",", "'"),
+                     style={"fontSize": "26px", "fontWeight": "bold"})
+        ], style={**GRAPH_STYLE["kpi_card"], "color": "black",
+                  "backgroundColor": "#f5f5f5"})
+    ], style={"display": "flex", "gap": "25px", "padding": "25px", "justifyContent": "space-evenly"})
+
+
+
 
 
     # Tabs
@@ -690,6 +704,44 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
             }
         )
 
+
+    elif tab == "country_products":
+        filter_row = html.Div([
+            html.Label(
+                "Top-N Produkte:",
+                style={
+                    "marginLeft": "20px",
+                    "fontFamily": "Arial",
+                    "lineHeight": "40px"   # sorgt für vertikale Zentrierung
+                }
+            ),
+            dcc.Dropdown(
+                id="country_products_topn",
+                options=[{"label": f"Top {n}", "value": n} for n in [5, 10, 20]],
+                value=5,
+                clearable=False,
+                style={"width": "150px"}
+            )
+        ], style={
+            "display": "flex",
+            "alignItems": "center",   # Label + Dropdown zentrieren
+            "gap": "15px",
+            "margin": "4    0px"
+        })
+
+        # Wrapper für die Ausgaben
+        content = html.Div([
+            filter_row,
+            html.Div(id="country_products_output", style={
+                "display": "flex",
+                "flexDirection": "column",
+                "gap": "30px"
+            })
+        ])
+
+
+
+
     elif tab == "treemap_hs":
         treemap_data = (
             dff_year.groupby(["Flow", "country_en", "HS6_Description"])["chf_num"]
@@ -750,8 +802,102 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
 
 
 
-
     return kpis, content
+
+@app.callback(
+    Output("country_products_output", "children"),
+    [Input("country", "value"),
+     Input("year", "value"),
+     Input("country_products_topn", "value")]
+)
+
+def update_country_products(selected_countries, years, top_n):
+    # Daten nach Jahren filtern (globaler Filter)
+    dff_tab = df[df["year"].isin(years)].copy()
+    dff_tab = dff_tab[dff_tab["chf_num"] > 0]
+
+    # Basisdaten: Land x Flow x Produkt
+    data = (
+        dff_tab.groupby(["country_en", "Flow", "HS6_Description"])["chf_num"]
+        .sum()
+        .reset_index()
+    )
+
+    # Falls kein Land gewählt → alle Länder anzeigen
+    if selected_countries:
+        countries = selected_countries
+    else:
+        countries = sorted(data["country_en"].unique())
+
+    rows = []
+    for c in countries:
+        for flow in ["Export", "Import"]:
+            df_flow = (
+                data[(data["country_en"] == c) & (data["Flow"] == flow)]
+                .nlargest(top_n, "chf_num")
+                .copy()
+            )
+            df_flow["HS6_wrapped"] = df_flow["HS6_Description"].apply(lambda t: wrap_and_shorten(t, 30, 60))
+
+            # 🔹 Titel dynamisch: Top-N, Flow, Land, Jahr(e)
+            years_label = f"{min(years)}–{max(years)}" if len(years) > 1 else str(years[0])
+            title = f"Top {top_n} {flow}s – {c} ({years_label})"
+
+            fig = px.bar(
+                df_flow,
+                x="chf_num", y="HS6_wrapped",
+                orientation="h",
+                title=title,
+                template=GRAPH_STYLE["template"],
+                color_discrete_sequence=[GRAPH_STYLE["color_export"]] if flow == "Export" else [GRAPH_STYLE["color_import"]],
+                text=df_flow["chf_num"].apply(human_format)
+            )
+            fig.update_traces(
+                textposition="outside",
+                insidetextanchor="start",
+                cliponaxis=False   # verhindert, dass Texte abgeschnitten werden
+            )
+
+            fig.update_layout(
+                yaxis=dict(categoryorder="total ascending", title="Produkt"),
+                xaxis=dict(title="CHF"),
+                margin=dict(l=300, r=120, t=80, b=80)  # mehr Platz links/rechts/unten
+            )
+            # Anzahl Produkte für diese Grafik
+            n_products = len(df_flow)
+
+            # Dynamische Höhe: mindestens 300px, sonst 30px pro Produkt
+            height = max(450, n_products * 40)
+
+            fig.update_yaxes(
+                automargin=True,
+                tickfont=dict(size=14)
+            )
+
+            fig = apply_standard_layout(fig, legend=False, height=height)
+
+            if flow == "Export":
+                col_export = dcc.Graph(figure=fig)
+            else:
+                col_import = dcc.Graph(figure=fig)
+
+        # Eine Zeile: Ländername + Export + Import nebeneinander
+        # Eine Zeile: Ländername + Export + Import nebeneinander
+        row = html.Div([
+            # feste Breite für die Länder-Spalte
+            html.Div(
+                html.H4(c, style={"textAlign": "left", "fontSize": "20px"}),
+                style={"flex": "0 0 220px", "padding": "10px"}   # <-- feste Breite
+            ),
+            html.Div(col_export, style={"flex": "2", "padding": "10px"}),
+            html.Div(col_import, style={"flex": "2", "padding": "10px"})
+        ], style={"display": "flex", "gap": "10px", "marginBottom": "40px"})
+
+
+        rows.append(row)
+
+    return html.Div(rows, style={"display": "flex", "flexDirection": "column", "gap": "30px"})
+
 
 # =========================
 # Run
