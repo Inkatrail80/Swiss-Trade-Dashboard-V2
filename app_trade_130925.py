@@ -888,9 +888,9 @@ def update_country_products(selected_countries, years, top_n):
 
 
             if flow == "Export":
-                col_export = dcc.Graph(figure=fig)
+                col_export = dcc.Graph(figure=fig, style={"width": "80vw"})
             else:
-                col_import = dcc.Graph(figure=fig)
+                col_import = dcc.Graph(figure=fig, style={"width": "80vw"})
 
         # Eine Zeile: Ländername + Export + Import nebeneinander
         # Eine Zeile: Ländername + Export + Import nebeneinander
