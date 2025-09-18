@@ -279,7 +279,7 @@ app.layout = html.Div([
     dcc.Tab(label="📈 Trade Volume by Year", value="trend", style={"fontFamily": "Arial"}),
     dcc.Tab(label="🌍 Trade by Country", value="country", style={"fontFamily": "Arial"}),
     dcc.Tab(label="📦 Trade by Product", value="product", style={"fontFamily": "Arial"}),
-    dcc.Tab(label="📦 Top Products per Country 🌍", value="country_products", style={"fontFamily": "Arial"}),
+    dcc.Tab(label="🌍📦 Top Products per Country ", value="country_products", style={"fontFamily": "Arial"}),
     dcc.Tab(label="📈 Trade Trend per Product", value="trend_hs", style={"fontFamily": "Arial"}),
     dcc.Tab(label="📂 Treemap", value="treemap_hs", style={"fontFamily": "Arial"})
     ],
@@ -855,14 +855,20 @@ def update_country_products(selected_countries, years, top_n):
             fig.update_traces(
                 textposition="outside",
                 insidetextanchor="start",
-                cliponaxis=False   # verhindert, dass Texte abgeschnitten werden
+                cliponaxis=False,   # verhindert, dass Texte abgeschnitten werden
+                hovertemplate=(  # <<<<< HIER
+                    "<b>Product:</b> %{y}<br>"
+                    "<b>CHF:</b> %{text}<extra></extra>"  # <--- HIER
             )
+            )
+
 
             fig.update_layout(
                 yaxis=dict(categoryorder="total ascending", title="Produkt"),
                 xaxis=dict(title="CHF"),
                 margin=dict(l=300, r=120, t=80, b=80)  # mehr Platz links/rechts/unten
             )
+
             # Anzahl Produkte für diese Grafik
             n_products = len(df_flow)
             height = max(450, n_products * 40)
