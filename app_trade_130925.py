@@ -888,9 +888,9 @@ def update_country_products(selected_countries, years, top_n):
 
 
             if flow == "Export":
-                col_export = dcc.Graph(figure=fig, style={"width": "80vw"})
+                col_export = dcc.Graph(figure=fig)
             else:
-                col_import = dcc.Graph(figure=fig, style={"width": "80vw"})
+                col_import = dcc.Graph(figure=fig)
 
         # Eine Zeile: Ländername + Export + Import nebeneinander
         # Eine Zeile: Ländername + Export + Import nebeneinander
@@ -900,9 +900,9 @@ def update_country_products(selected_countries, years, top_n):
                 html.H4(c, style={"textAlign": "left", "fontSize": "20px"}),
                 style={"flex": "0 0 220px", "padding": "10px"}   # <-- feste Breite
             ),
-            html.Div(col_export, style={"flex": "2", "padding": "10px"}),
-            html.Div(col_import, style={"flex": "2", "padding": "10px"})
-        ], style={"display": "flex", "gap": "10px", "marginBottom": "40px"})
+            html.Div(col_export, style={"flex": "2", "padding": "20px"}),
+            html.Div(col_import, style={"flex": "2", "padding": "20px"})
+        ], style={"display": "flex", "gap": "10px", "margin": "50px"})
 
 
         rows.append(row)
