@@ -717,7 +717,7 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
             ),
             dcc.Dropdown(
                 id="country_products_topn",
-                options=[{"label": f"Top {n}", "value": n} for n in [5, 10, 20]],
+                options=[{"label": f"Top {n}", "value": n} for n in [5, 10, 20, 25,50,100]],
                 value=5,
                 clearable=False,
                 style={"width": "150px"}
@@ -726,7 +726,7 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
             "display": "flex",
             "alignItems": "center",   # Label + Dropdown zentrieren
             "gap": "15px",
-            "margin": "4    0px"
+            "margin": "40px"
         })
 
         # Wrapper für die Ausgaben
@@ -865,9 +865,13 @@ def update_country_products(selected_countries, years, top_n):
             )
             # Anzahl Produkte für diese Grafik
             n_products = len(df_flow)
-
-            # Dynamische Höhe: mindestens 300px, sonst 30px pro Produkt
             height = max(450, n_products * 40)
+
+            fig.update_layout(
+                yaxis=dict(categoryorder="total ascending", title="Produkt"),
+                xaxis=dict(title="CHF"),
+                margin=dict(l=250, r=50, t=80, b=50)
+            )
 
             fig.update_yaxes(
                 automargin=True,
@@ -875,6 +879,7 @@ def update_country_products(selected_countries, years, top_n):
             )
 
             fig = apply_standard_layout(fig, legend=False, height=height)
+
 
             if flow == "Export":
                 col_export = dcc.Graph(figure=fig)
