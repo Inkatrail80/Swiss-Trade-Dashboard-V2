@@ -708,7 +708,7 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
     elif tab == "country_products":
         filter_row = html.Div([
             html.Label(
-                "Top-N Produkte:",
+                "Top Products:",
                 style={
                     "marginLeft": "20px",
                     "fontFamily": "Arial",
