@@ -928,24 +928,31 @@ def update_product_options(hs_level):
     if hs_level == "HS8_Description":
         df_temp = df.copy()
 
-        # tn_key bereinigen: alles außer Ziffern entfernen
+        # tn_key bereinigen: nur Ziffern, 8-stellig
         df_temp["tn_key_str"] = (
             df_temp["tn_key"]
             .astype(str)
-            .str.replace("[^0-9]", "", regex=True)   # entfernt ZT_, Punkte, etc.
+            .str.replace("[^0-9]", "", regex=True)   # nur Zahlen behalten
             .str.zfill(8)                           # immer 8-stellig
         )
 
         # Format XXXX.XXXX
-        df_temp["tn_key_str"] = (
+        df_temp["tn_key_fmt"] = (
             df_temp["tn_key_str"].str[:4] + "." + df_temp["tn_key_str"].str[4:]
         )
 
-        # Label im gewünschten Format
-        df_temp["label"] = df_temp["tn_key_str"] + " – " + df_temp["HS8_Description"]
+        # Numerischen Sortierschlüssel bauen
+        df_temp["tn_key_num"] = df_temp["tn_key_str"].astype(int)
+
+        # Label für Dropdown
+        df_temp["label"] = df_temp["tn_key_fmt"] + " – " + df_temp["HS8_Description"]
+
+        # 🔹 Hier numerisch sortieren
+        df_temp = df_temp.sort_values("tn_key_num")
 
         options = [
-            {"label": l, "value": l} for l in sorted(df_temp["label"].unique())
+            {"label": row["label"], "value": row["label"]}
+            for _, row in df_temp[["label"]].drop_duplicates().iterrows()
         ]
     else:
         options = [
@@ -953,6 +960,7 @@ def update_product_options(hs_level):
         ]
 
     return options
+
 
 # =========================
 # Run
