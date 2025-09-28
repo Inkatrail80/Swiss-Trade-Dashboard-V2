@@ -29,3 +29,21 @@
 .mantine-Pill-label {
     font-size: 18px !important;
 }
+
+    /* Einheitliche Höhe für alle Mantine Selects */
+.mantine-Select-input,
+.mantine-MultiSelect-input,
+.mantine-Select-dropdown,
+.mantine-MultiSelect-dropdown {
+    min-height: 48px !important;   /* Höhe anpassen */
+    font-size: 18px !important;    /* gleiche Schriftgröße */
+    display: flex;
+    align-items: center;
+}
+
+/* Auch auf den ausgewählten Values */
+.mantine-Select-value,
+.mantine-MultiSelect-value {
+    font-size: 18px !important;
+    line-height: 48px !important;   /* gleiche Höhe */
+}
