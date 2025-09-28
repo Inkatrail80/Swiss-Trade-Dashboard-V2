@@ -284,9 +284,9 @@ app.layout = dmc.MantineProvider(
                     # Language separat
                     html.Div([
                         html.Label(id="lang_label", style={"fontWeight": "bold"}),
-                        dcc.Dropdown(
+                        dmc.Select(
                             id="language",
-                            options=[
+                            data=[
                                 {"label": "English", "value": "en"},
                                 {"label": "Español", "value": "es"},
                             ],
@@ -301,11 +301,14 @@ app.layout = dmc.MantineProvider(
                         # Year
                         html.Div([
                             html.Label("Year:", style={"fontFamily": "Arial", "font-weight": "bold"}),
-                            dcc.Dropdown(
+                            dmc.MultiSelect(
                                 id="year",
-                                options=[{"label": str(y), "value": int(y)} for y in sorted(df["year"].dropna().unique())],
-                                value=[int(df["year"].max())],
-                                multi=True,
+                                data=[
+                                    {"label": str(int(y)), "value": str(int(y))}
+                                    for y in sorted(df["year"].dropna().unique())
+                                ],
+                                value=[str(int(df["year"].max()))],
+                                clearable=True,
                                 style={"width": "150px", "fontFamily": "Arial"}
                             )
                         ], style={"display": "flex", "flexDirection": "column"}),
@@ -313,10 +316,11 @@ app.layout = dmc.MantineProvider(
                         # Country
                         html.Div([
                             html.Label("Country:", style={"fontFamily": "Arial", "font-weight": "bold"}),
-                            dcc.Dropdown(
+                            dmc.MultiSelect(
                                 id="country",
-                                options=[{"label": l, "value": l} for l in sorted(df["country_en"].unique())],
-                                multi=True,
+                                data=[{"label": l, "value": l} for l in sorted(df["country_en"].unique())],
+                                value=[],
+                                clearable=True,
                                 style={"width": "150px", "fontFamily": "Arial"}
                             )
                         ], style={"display": "flex", "flexDirection": "column"}),
@@ -324,9 +328,9 @@ app.layout = dmc.MantineProvider(
                         # Tariff Level
                         html.Div([
                             html.Label("Custom tariff level:", style={"fontFamily": "Arial", "font-weight": "bold"}),
-                            dcc.Dropdown(
+                            dmc.Select(
                                 id="hs_level",
-                                options=[
+                                data=[
                                     {"label": "2 digit - broad groups", "value": "HS2_Description"},
                                     {"label": "4 digit - groups", "value": "HS4_Description"},
                                     {"label": "6 digit - products", "value": "HS6_Description"},
@@ -404,6 +408,11 @@ app.layout = dmc.MantineProvider(
 
 def update_dashboard(year, country, hs_level, product, tab, lang):
     labels = LANG.get(lang, LANG["en"])  # fallback: englisch
+
+    year = [int(y) for y in year] if year else []
+    country = country or []
+    product = product or []
+
     dff = df.copy()
     if country:
         dff = dff[dff["country_en"].isin(country)]
@@ -422,7 +431,10 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
 
 
 
-    dff_year = dff[dff["year"].isin(year)].copy()
+    if year:
+        dff_year = dff[dff["year"].isin(year)].copy()
+    else:
+        dff_year = dff.copy()
 
     # ================= KPIs =================
     exp_sum = dff_year.loc[dff_year["Flow"] == "Export", "chf_num"].sum()
@@ -580,9 +592,9 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                     "lineHeight": "40px",
                     "font-weight": "bold",
                 }),
-                dcc.Dropdown(
+                dmc.Select(
                     id="hs_level_trend",
-                    options=[
+                    data=[
                         {"label": "HS2", "value": "HS2_Description"},
                         {"label": "HS4", "value": "HS4_Description"},
                         {"label": "HS6", "value": "HS6_Description"},
@@ -779,10 +791,10 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                     "font-weight":"bold",
                 }
             ),
-            dcc.Dropdown(
+            dmc.Select(
                 id="country_products_topn",
-                options=[{"label": f"Top {n}", "value": n} for n in [5, 10, 20, 25,50,100]],
-                value=5,
+                data=[{"label": f"Top {n}", "value": str(n)} for n in [5, 10, 20, 25, 50, 100]],
+                value="5",
                 clearable=False,
                 style={"width": "150px"}
             )
@@ -956,6 +968,10 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
 )
 
 def update_country_products(selected_countries, years, top_n):
+    years = [int(y) for y in years] if years else [int(y) for y in sorted(df["year"].dropna().unique())]
+    top_n = int(top_n) if top_n else 5
+    selected_countries = selected_countries or []
+
     # Daten nach Jahren filtern (globaler Filter)
     dff_tab = df[df["year"].isin(years)].copy()
     dff_tab = dff_tab[dff_tab["chf_num"] > 0]

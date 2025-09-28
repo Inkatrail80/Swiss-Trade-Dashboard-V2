@@ -5,6 +5,7 @@ import plotly.express as px
 import os
 import textwrap
 import humanize
+import dash_mantine_components as dmc
 
 # =========================
 # Load data
@@ -203,34 +204,39 @@ app.layout = html.Div([
         # Erste Reihe: Dropdowns
         html.Div([
             html.Label("Year:", style={"fontFamily": "Arial", "alignSelf": "center"}),
-            dcc.Dropdown(
+            dmc.MultiSelect(
                 id="year",
-                options=[{"label": str(y), "value": int(y)} for y in sorted(df["year"].dropna().unique())],
-                value=[int(df["year"].max())],
-                multi=True,
+                data=[
+                    {"label": str(int(y)), "value": str(int(y))}
+                    for y in sorted(df["year"].dropna().unique())
+                ],
+                value=[str(int(df["year"].max()))],
+                clearable=True,
                 style={"width": "150px", "fontFamily": "Arial"}
             ),
 
             html.Label("Country:", style={"fontFamily": "Arial", "alignSelf": "center"}),
-            dcc.Dropdown(
+            dmc.MultiSelect(
                 id="country",
-                options=[{"label": l, "value": l} for l in sorted(df["country_en"].unique())],
-                multi=True,
+                data=[{"label": l, "value": l} for l in sorted(df["country_en"].unique())],
+                value=[],
+                clearable=True,
                 style={"width": "250px", "fontFamily": "Arial"}
             ),
 
             html.Label("Product:", style={"fontFamily": "Arial", "alignSelf": "center"}),
-            dcc.Dropdown(
+            dmc.MultiSelect(
                 id="product",
-                options=[{"label": p, "value": p} for p in sorted(df["HS6_Description"].unique())],
-                multi=True,
+                data=[{"label": p, "value": p} for p in sorted(df["HS6_Description"].unique())],
+                value=[],
+                clearable=True,
                 style={"flex": "1", "fontFamily": "Arial"}
             ),
 
-            html.Label("HS-Level:", style={"fontFamily": "Arial", "alignSelf": "center"}), 
-            dcc.Dropdown(
+            html.Label("HS-Level:", style={"fontFamily": "Arial", "alignSelf": "center"}),
+            dmc.Select(
                 id="hs_level",
-                options=[
+                data=[
                     {"label": "HS2", "value": "HS2_Description"},
                     {"label": "HS4", "value": "HS4_Description"},
                     {"label": "HS6", "value": "HS6_Description"},
@@ -312,6 +318,11 @@ app.layout = html.Div([
      Input("tabs", "value")]
 )
 def update_dashboard(year, country, product, hs_level, chf_min, tab):
+    available_years = [int(y) for y in sorted(df["year"].dropna().unique())]
+    year = [int(y) for y in year] if year else available_years
+    country = country or []
+    product = product or []
+
     dff = df.copy()
     if country:
         dff = dff[dff["country_en"].isin(country)]
@@ -715,10 +726,10 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
                     "lineHeight": "40px"   # sorgt für vertikale Zentrierung
                 }
             ),
-            dcc.Dropdown(
+            dmc.Select(
                 id="country_products_topn",
-                options=[{"label": f"Top {n}", "value": n} for n in [5, 10, 20, 25,50,100]],
-                value=5,
+                data=[{"label": f"Top {n}", "value": str(n)} for n in [5, 10, 20, 25, 50, 100]],
+                value="5",
                 clearable=False,
                 style={"width": "150px"}
             )
@@ -812,6 +823,11 @@ def update_dashboard(year, country, product, hs_level, chf_min, tab):
 )
 
 def update_country_products(selected_countries, years, top_n):
+    available_years = [int(y) for y in sorted(df["year"].dropna().unique())]
+    years = [int(y) for y in years] if years else available_years
+    top_n = int(top_n) if top_n else 5
+    selected_countries = selected_countries or []
+
     # Daten nach Jahren filtern (globaler Filter)
     dff_tab = df[df["year"].isin(years)].copy()
     dff_tab = dff_tab[dff_tab["chf_num"] > 0]
