@@ -349,7 +349,7 @@ app.layout = dmc.MantineProvider(
                                 data=[],  # wird durch Callback gefüllt
                                 searchable=True,
                                 clearable=True,
-                                nothingFound="No results",
+                                nothingFoundMessage="No results",
                                 maxDropdownHeight=500,
                                 style={"width": "100%", "fontFamily": "Arial", "font-size":"16px"}
                             )
