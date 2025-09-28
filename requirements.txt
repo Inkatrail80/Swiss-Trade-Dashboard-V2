@@ -1,7 +1,7 @@
-dash==2.17.1
-pandas==2.2.3
-plotly==6.1.2
-pyarrow==20.0.0
-openpyxl==3.1.5
-gunicorn==22.0.0
-humanize==4.10.0
+dash==2.17.1 → letzte stabile Version aus 2024/2025, kompatibel mit dmc.
+dash-bootstrap-components==1.6.0 → passt zu Dash ≥ 2.7.
+dash-mantine-components==0.12.1 → aktuell stabile Version, unterstützt die Select/MultiSelect Features.
+plotly==5.23.0 → stabile, moderne Plotly-Version, getestet mit Dash ≥ 2.17.
+pandas==2.2.2 → stabil, schnell, mit Int64-Support.
+humanize==4.10.0 → für formatiertes Zahlen-Output (1.2M, 3.4Bn).
+gunicorn==23.0.0 → WSGI-Server für Produktion, notwendig auf Render/Heroku.
