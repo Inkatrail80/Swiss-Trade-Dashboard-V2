@@ -82,7 +82,7 @@ GRAPH_STYLE = {
         "fontSize": "28px",
         "background": "white",
         "fontFamily": "Arial",
-        "height":"100px"
+        "height":"220px"
     },
 
     # Farben
@@ -282,73 +282,76 @@ app.layout = dmc.MantineProvider(
                 # =========================
                 html.Div([
                     # Language separat
+                    # Language
                     html.Div([
                         html.Label(id="lang_label", style={"fontWeight": "bold"}),
-                        dcc.Dropdown(
+                        dmc.Select(
                             id="language",
-                            options=[
+                            data=[
                                 {"label": "English", "value": "en"},
                                 {"label": "Español", "value": "es"},
                             ],
                             value="en",
                             clearable=False,
-                            style={"width": "150px"}
+                            required=True,
+                            style={"width": 180}
                         )
                     ], style={"marginBottom": "20px"}),
 
-                    # Filterzeile
+                    # Year
                     html.Div([
-                        # Year
-                        html.Div([
-                            html.Label("Year:", style={"fontFamily": "Arial", "font-weight": "bold"}),
-                            dcc.Dropdown(
-                                id="year",
-                                options=[{"label": str(y), "value": int(y)} for y in sorted(df["year"].dropna().unique())],
-                                value=[int(df["year"].max())],
-                                multi=True,
-                                style={"width": "150px", "fontFamily": "Arial"}
-                            )
-                        ], style={"display": "flex", "flexDirection": "column"}),
+                        html.Label(id="year_label", style={"fontWeight": "bold"}),
+                        dmc.MultiSelect(
+                            id="year",
+                            data=[{"label": str(y), "value": str(int(y))} for y in sorted(df["year"].dropna().unique())],
+                            value=[str(int(df["year"].max()))],
+                            searchable=True,
+                            clearable=True,
+                            style={"width": 250}
+                        )
+                    ], style={"display": "flex", "flexDirection": "column"}),
 
-                        # Country
-                        html.Div([
-                            html.Label("Country:", style={"fontFamily": "Arial", "font-weight": "bold"}),
-                            dcc.Dropdown(
-                                id="country",
-                                options=[{"label": l, "value": l} for l in sorted(df["country_en"].unique())],
-                                multi=True,
-                                style={"width": "150px", "fontFamily": "Arial"}
-                            )
-                        ], style={"display": "flex", "flexDirection": "column"}),
+                    # Country
+                    html.Div([
+                        html.Label(id="country_label", style={"fontWeight": "bold"}),
+                        dmc.MultiSelect(
+                            id="country",
+                            data=[{"label": l, "value": l} for l in sorted(df["country_en"].unique())],
+                            searchable=True,
+                            clearable=True,
+                            style={"width": 300}
+                        )
+                    ], style={"display": "flex", "flexDirection": "column"}),
 
-                        # Tariff Level
-                        html.Div([
-                            html.Label("Custom tariff level:", style={"fontFamily": "Arial", "font-weight": "bold"}),
-                            dcc.Dropdown(
-                                id="hs_level",
-                                options=[
-                                    {"label": "2 digit - broad groups", "value": "HS2_Description"},
-                                    {"label": "4 digit - groups", "value": "HS4_Description"},
-                                    {"label": "6 digit - products", "value": "HS6_Description"},
-                                    {"label": "8 digit - detailed products", "value": "HS8_Description"},
-                                ],
-                                value="HS6_Description",
-                                clearable=False,
-                                style={"width": "180px", "fontFamily": "Arial"}
-                            )
-                        ], style={"display": "flex", "flexDirection": "column"}),
+                    # Tariff Level
+                    html.Div([
+                        html.Label(id="hs_level_label", style={"fontWeight": "bold"}),
+                        dmc.Select(
+                            id="hs_level",
+                            data=[
+                                {"label": "2 digit - broad groups", "value": "HS2_Description"},
+                                {"label": "4 digit - groups", "value": "HS4_Description"},
+                                {"label": "6 digit - products", "value": "HS6_Description"},
+                                {"label": "8 digit - detailed products", "value": "HS8_Description"},
+                            ],
+                            value="HS6_Description",
+                            clearable=False,
+                            required=True,
+                            style={"width": 280}
+                        )
+                    ], style={"display": "flex", "flexDirection": "column"}),
 
                         # Description (Mantine MultiSelect)
                         html.Div([
-                            html.Label("Description:", style={"fontFamily": "Arial", "font-weight": "bold"}),
+                            html.Label(id="product_label", style={"fontWeight": "bold"}),
                             dmc.MultiSelect(
                                 id="product",
                                 data=[],  # wird durch Callback gefüllt
                                 searchable=True,
                                 clearable=True,
                                 nothingFoundMessage="No match",
-                                maxDropdownHeight=300,
-                                style={"width": "100%", "fontFamily": "Arial"}
+                                maxDropdownHeight=500,
+                                style={"width": "100%", "fontFamily": "Arial", "font-size":"16px"}
                             )
                         ], style={"flex": 1, "display": "flex", "flexDirection": "column"})
                     ],
@@ -383,8 +386,6 @@ app.layout = dmc.MantineProvider(
                     style={"textAlign": "center", "marginTop": "40px", "color": "gray", "fontSize": "12px", "fontFamily": "Arial"}
                 )
             ])
-        ]
-    )
 
 
 # =========================
@@ -403,7 +404,15 @@ app.layout = dmc.MantineProvider(
 )
 
 def update_dashboard(year, country, hs_level, product, tab, lang):
+
+    # === Fallbacks erzwingen ===
+    if not hs_level:
+        hs_level = "HS6_Description"
+    if not lang:
+        lang = "en"
+
     labels = LANG.get(lang, LANG["en"])  # fallback: englisch
+    years = [int(y) for y in year] if year else []
     dff = df.copy()
     if country:
         dff = dff[dff["country_en"].isin(country)]
@@ -422,46 +431,47 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
 
 
 
-    dff_year = dff[dff["year"].isin(year)].copy()
+    dff_year = dff[dff["year"].isin(years)].copy()
 
     # ================= KPIs =================
     exp_sum = dff_year.loc[dff_year["Flow"] == "Export", "chf_num"].sum()
     imp_sum = dff_year.loc[dff_year["Flow"] == "Import", "chf_num"].sum()
     balance, volume = exp_sum - imp_sum, exp_sum + imp_sum
-    if not year:
+    if not years:
         year_label = "All years"
-    elif len(year) == 1:
-        year_label = str(year[0])
+    elif len(years) == 1:
+        year_label = str(years[0])
     else:
-        year_label = f"{min(year)}–{max(year)}"
+        year_label = f"{min(years)}–{max(years)}"
+
 
 
 
 
     kpis = html.Div([
         html.Div([
-            html.Div("Exports " + year_label, style={"fontSize": "20px", "padding": "16px"}),
+            html.Div(f"{labels['kpi_exports']} {year_label}", style={"fontSize": "20px", "padding": "16px"}),
             html.Div(f"CHF {exp_sum:,.0f}".replace(",", "'"),
                      style={"fontSize": "28px", "fontWeight": "bold"})
         ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_export"],
                   "backgroundColor": GRAPH_STYLE["bg_color_export"]}), #"#fdecea"
 
         html.Div([
-            html.Div("Imports " + year_label, style={"fontSize": "20px", "padding": "16px"}),
+            html.Div(f"{labels['kpi_imports']} {year_label}", style={"fontSize": "20px", "padding": "16px"}),
             html.Div(f"CHF {imp_sum:,.0f}".replace(",", "'"),
                      style={"fontSize": "28px", "fontWeight": "bold"})
         ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_import"],
                   "backgroundColor": GRAPH_STYLE["bg_color_import"]}),
 
         html.Div([
-            html.Div("Trade balance " + year_label, style={"fontSize": "20px", "padding": "16px"}),
+            html.Div(f"{labels['kpi_balance']} {year_label}", style={"fontSize": "20px", "padding": "16px"}),
             html.Div(f"CHF {balance:,.0f}".replace(",", "'"),
                      style={"fontSize": "28px", "fontWeight": "bold"})
         ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_trade"],
                   "backgroundColor": GRAPH_STYLE["bg_color_balance"]}),
 
         html.Div([
-            html.Div("Trade volume " + year_label, style={"fontSize": "20px", "padding": "16px"}),
+            html.Div(f"{labels['kpi_volume']} {year_label}", style={"fontSize": "20px", "padding": "16px"}),
             html.Div(f"CHF {volume:,.0f}".replace(",", "'"),
                      style={"fontSize": "28px", "fontWeight": "bold"})
         ], style={**GRAPH_STYLE["kpi_card"], "color": "black",
@@ -580,9 +590,9 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                     "lineHeight": "40px",
                     "font-weight": "bold",
                 }),
-                dcc.Dropdown(
+                dmc.Select(
                     id="hs_level_trend",
-                    options=[
+                    data=[
                         {"label": "HS2", "value": "HS2_Description"},
                         {"label": "HS4", "value": "HS4_Description"},
                         {"label": "HS6", "value": "HS6_Description"},
@@ -590,7 +600,7 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                     ],
                     value="HS2_Description",
                     clearable=False,
-                    style={"width": "200px", "fontFamily": "Arial"},
+                    style={"width": 200}
                 ),
             ], style={"margin": "20px", "display": "flex",
             "alignItems": "center",   # Label + Dropdown zentrieren
@@ -621,7 +631,7 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
             years_sorted = sorted(years)
             return ", ".join(str(y) for y in years_sorted)
 
-        years_label = format_years(year)
+        years_label = format_years(years)
 
         fig = px.bar(
             country_ranking, x="chf_num", y="country_en",
@@ -716,7 +726,7 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                 return "LATAM"
             return ", ".join(countries)
 
-        years_label = format_years(year)
+        years_label = format_years(years)
         countries_label = format_countries(country)
 
         # Plot
@@ -779,13 +789,14 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                     "font-weight":"bold",
                 }
             ),
-            dcc.Dropdown(
+            dmc.Select(
                 id="country_products_topn",
-                options=[{"label": f"Top {n}", "value": n} for n in [5, 10, 20, 25,50,100]],
-                value=5,
+                data=[{"label": f"Top {n}", "value": str(n)} for n in [5, 10, 20, 25, 50, 100]],
+                value="5",    # 👉 String statt Int
                 clearable=False,
-                style={"width": "150px"}
+                style={"width": 150}
             )
+
         ], style={
             "display": "flex",
             "alignItems": "center",   # Label + Dropdown zentrieren
@@ -955,7 +966,11 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
      Input("country_products_topn", "value")]
 )
 
+
 def update_country_products(selected_countries, years, top_n):
+
+    years = [int(y) for y in years] if years else []
+    top_n = int(top_n)
     # Daten nach Jahren filtern (globaler Filter)
     dff_tab = df[df["year"].isin(years)].copy()
     dff_tab = dff_tab[dff_tab["chf_num"] > 0]
@@ -1058,6 +1073,7 @@ def update_country_products(selected_countries, years, top_n):
     [Input("country", "value"),
      Input("hs_level_trend", "value")]
 )
+
 def update_trend_hs(country, hs_level):
     all_years = df["year"].dropna().unique()
     min_year, max_year = int(all_years.min()), int(all_years.max())
@@ -1134,7 +1150,14 @@ def update_trend_hs(country, hs_level):
     Output("product", "data"),
     Input("hs_level", "value")
 )
+
+
 def update_product_options(hs_level):
+
+    if not hs_level:  
+       hs_level = "HS6_Description"   # Fallback erzwingen
+
+
     if hs_level == "HS2_Description":
         df_temp = df[["HS2", "HS2_Label"]].drop_duplicates().sort_values("HS2")
         options = [{"label": row["HS2_Label"], "value": row["HS2"]} for _, row in df_temp.iterrows()]
@@ -1156,6 +1179,10 @@ def update_product_options(hs_level):
     Input("language", "value")
 )
 def update_tabs(lang):
+
+    if not lang:
+       lang = "en"  # Fallback erzwingen
+    labels = LANG.get(lang, LANG["en"])
     labels = LANG.get(lang, LANG["en"])
     return [
         dcc.Tab(label=labels["tab_trend"], value="trend"),
@@ -1167,6 +1194,23 @@ def update_tabs(lang):
         dcc.Tab(label=labels["tab_sankey"], value="sankey"),
     ]
 
+@app.callback(
+    [Output("lang_label", "children"),
+     Output("year_label", "children"),
+     Output("country_label", "children"),
+     Output("hs_level_label", "children"),
+     Output("product_label", "children")],
+    Input("language", "value")
+)
+def update_filter_labels(lang):
+    if not lang:
+        lang = "en"
+    labels = LANG.get(lang, LANG["en"])
+    return (labels["label_language"],
+            labels["label_year"],
+            labels["label_country"],
+            labels["label_hs_level"],
+            labels["label_description"])
 
 # =========================
 # Run
