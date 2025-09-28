@@ -1,0 +1,40 @@
+# -*- coding: utf-8 -*-
+
+LANG = {
+    "en": {
+        "year": "Year",
+        "country": "Country",
+        "tariff": "Custom tariff level",
+        "description": "Description",
+        "exports": "Exports",
+        "imports": "Imports",
+        "balance": "Trade balance",
+        "volume": "Trade volume",
+        "tab_trend": "📈 Trade Volume by Year",
+        "tab_country": "🌍 Trade by Country",
+        "tab_product": "📦 Trade by Product",
+        "tab_country_products": "🌍📦 Top Products per Country",
+        "tab_trend_hs": "📈 Trade Trend per Product",
+        "tab_treemap": "📂 Treemap",
+        "tab_sankey": "🌐 Sankey Trade Flow",
+        "language": "Language",
+    },
+    "es": {
+        "year": "Año",
+        "country": "País",
+        "tariff": "Nivel arancelario",
+        "description": "Descripción",
+        "exports": "Exportaciones",
+        "imports": "Importaciones",
+        "balance": "Balanza comercial",
+        "volume": "Volumen comercial",
+        "tab_trend": "📈 Comercio por año",
+        "tab_country": "🌍 Comercio por país",
+        "tab_product": "📦 Comercio por producto",
+        "tab_country_products": "🌍📦 Principales productos por país",
+        "tab_trend_hs": "📈 Tendencia por producto",
+        "tab_treemap": "📂 Mapa jerárquico",
+        "tab_sankey": "🌐 Flujo comercial Sankey",
+        "language": "Idioma",
+    }
+}

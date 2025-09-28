@@ -1,42 +1,4 @@
-/* =========================
-   Global Styles
-   ========================= */
-body {
-    font-family: Arial, sans-serif;
-}
-
-/* =========================
-   Dropdown Fix (lange Texte)
-   ========================= */
-.Select-menu-outer {
-    max-height: 400px !important;   /* Scrollbar bei langen Listen */
-    overflow-y: auto !important;
-    border: 1px solid #ccc;
-}
-
-.Select-option {
-    white-space: normal !important;   /* Zeilenumbruch erlauben */
-    word-wrap: break-word !important;
-    border-bottom: 1px solid #eee;    /* Linie zwischen Optionen */
-    padding: 6px 10px;
-    font-size: 14px;
-    line-height: 1.4;
-}
-
-.Select-option:last-child {
-    border-bottom: none;  /* keine Linie beim letzten Eintrag */
-}
-
-.Select-value-label {
+select option {
     white-space: normal !important;
     word-wrap: break-word !important;
-}
-
-/* =========================
-   Graph Hoverlabels
-   ========================= */
-.js-plotly-plot .hoverlayer .hovertext {
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    text-align: left;
 }

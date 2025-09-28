@@ -5,6 +5,10 @@ import plotly.express as px
 import os
 import textwrap
 import humanize
+from translations import LANG
+import dash_bootstrap_components as dbc
+import dash_mantine_components as dmc
+
 
 # =========================
 # Load data
@@ -21,6 +25,42 @@ for col in ["country_en", "HS2_Description", "HS4_Description", "HS6_Description
 
 # Flow-Mapping
 df["Flow"] = df["traffic"].map({"EXP": "Export", "IMP": "Import"}).fillna(df["traffic"])
+
+
+# Einheitliches tn_key-Format (8-stellig, nur Ziffern)
+df["tn_key"] = (
+    df["tn_key"]
+    .astype(str)
+    .str.replace("[^0-9]", "", regex=True)
+    .str.zfill(8)
+)
+
+# ================================
+# HS-Level Dimensionen vorbereiten
+# ================================
+
+# HS2
+df["HS2"] = df["tn_key"].str[:2]
+df["HS2_Label"] = df["HS2"] + " – " + df["HS2_Description"]
+
+# HS4
+df["HS4"] = df["tn_key"].str[:4]
+df["HS4_Label"] = df["HS4"].str[:2] + df["HS4"].str[2:] + " – " + df["HS4_Description"]
+
+# HS6
+df["HS6"] = df["tn_key"].str[:6]
+df["HS6_Label"] = (
+    df["HS6"].str[:4] + "." + df["HS6"].str[4:] +
+    " – " + df["HS6_Description"]
+)
+
+# HS8
+df["HS8"] = df["tn_key"].str[:8]
+df["HS8_Label"] = (
+    df["HS8"].str[:4] + "." + df["HS8"].str[4:] + 
+    " – " + df["HS8_Description"]
+)
+
 
 # =========================
 # Style
@@ -186,99 +226,166 @@ HOVERTEXTS = {
 # =========================
 # App
 # =========================
-app = Dash(__name__, suppress_callback_exceptions=True)
+app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
 server = app.server
 
-app.layout = html.Div([
-    # Header
-    html.Div([
-        html.H1("Swiss Trade Dashboard", style={"marginBottom": "0", "fontFamily": "Arial"}),
-        html.H3("LATAM 2019–2024", style={"marginTop": "0", "color": "gray", "fontFamily": "Arial"})
-    ], style={
-        "textAlign": "center",
-        "marginBottom": "25px",
-        "padding": "25px",
-        "borderRadius": "6px",
-        "boxShadow": "4px 4px 15px rgba(0,0,0,0.2)",
-        "background": "linear-gradient(145deg, #ffffff, #f0f0f0)"
-    }),
+app.layout = dmc.MantineProvider(
+        theme={
+            "fontFamily": "Arial, sans-serif",
+            "primaryColor": "red",   # 🇨🇭 kannst du ändern
+        },
+        children=[
+            html.Div([
 
-    # =========================
-    # Filters
-    # =========================
-    html.Div([
-        html.Div([
-            html.Label("Year:", style={"fontFamily": "Arial", "font-weight":"bold", "alignSelf": "center"}),
-            dcc.Dropdown(
-                id="year",
-                options=[{"label": str(y), "value": int(y)} for y in sorted(df["year"].dropna().unique())],
-                value=[int(df["year"].max())],
-                multi=True,
-                style={"width": "150px", "fontFamily": "Arial"}
-            ),
-
-            html.Label("Country:", style={"fontFamily": "Arial", "font-weight":"bold", "alignSelf": "center"}),
-            dcc.Dropdown(
-                id="country",
-                options=[{"label": l, "value": l} for l in sorted(df["country_en"].unique())],
-                multi=True,
-                style={"width": "250px", "fontFamily": "Arial"}
-            ),
-
-            html.Label("Custom tariff level:", style={"fontFamily": "Arial", "font-weight":"bold", "alignSelf": "center"}),
-            dcc.Dropdown(
-                id="hs_level",
-                options=[
-                    {"label": "2 digit", "value": "HS2_Description"},
-                    {"label": "4 digit", "value": "HS4_Description"},
-                    {"label": "6 digit", "value": "HS6_Description"},
-                    {"label": "8 digit", "value": "HS8_Description"},
+                # =========================
+                # Header
+                # =========================
+                html.Div([
+                    html.H1(
+                        "Swiss Trade Insights",
+                        style={
+                            "margin": "0",
+                            "fontFamily": "Arial, sans-serif",
+                            "fontSize": "48px",
+                            "fontWeight": "bold",
+                            "background": "linear-gradient(90deg, #D52B1E, #022B7E)",
+                            "WebkitBackgroundClip": "text",
+                            "WebkitTextFillColor": "transparent",
+                            "textAlign": "center",
+                            "letterSpacing": "2px",
+                        }
+                    ),
+                    html.H3(
+                        "LATAM 2019–2024",
+                        style={
+                            "marginTop": "10px",
+                            "color": "#555",
+                            "fontFamily": "Arial, sans-serif",
+                            "fontSize": "22px",
+                            "fontStyle": "italic",
+                            "textAlign": "center",
+                            "letterSpacing": "1px",
+                        }
+                    )
                 ],
-                value="HS6_Description",
-                clearable=False,
-                style={"width": "250px", "fontFamily": "Arial"}
-            ),
+                style={
+                    "textAlign": "center",
+                    "marginBottom": "40px",
+                    "padding": "20px",
+                    "borderRadius": "12px",
+                    "background": "linear-gradient(145deg, #f9f9f9, #e8eef7)",
+                    "boxShadow": "4px 6px 15px rgba(0,0,0,0.15)",
+                }),
 
-            html.Label("Description:", style={"fontFamily": "Arial", "font-weight":"bold", "alignSelf": "center"}),
-            dcc.Dropdown(
-                id="product",
-                multi=True,
-                style={"flex": "1", "fontFamily": "Arial"}
-            )
-        ], style={"display": "flex", "gap": "20px", "marginBottom": "20px", "width": "90vw"}),
-    ])
-    , 
+                # =========================
+                # Filters
+                # =========================
+                html.Div([
+                    # Language separat
+                    html.Div([
+                        html.Label(id="lang_label", style={"fontWeight": "bold"}),
+                        dcc.Dropdown(
+                            id="language",
+                            options=[
+                                {"label": "English", "value": "en"},
+                                {"label": "Español", "value": "es"},
+                            ],
+                            value="en",
+                            clearable=False,
+                            style={"width": "150px"}
+                        )
+                    ], style={"marginBottom": "20px"}),
 
-    # KPIs
-    html.Div(id="kpis", style={
-        "display": "flex",
-        "justifyContent": "space-between",
-        "marginBottom": "20px",
-        "fontFamily": "Arial"
-    }),
+                    # Filterzeile
+                    html.Div([
+                        # Year
+                        html.Div([
+                            html.Label("Year:", style={"fontFamily": "Arial", "font-weight": "bold"}),
+                            dcc.Dropdown(
+                                id="year",
+                                options=[{"label": str(y), "value": int(y)} for y in sorted(df["year"].dropna().unique())],
+                                value=[int(df["year"].max())],
+                                multi=True,
+                                style={"width": "150px", "fontFamily": "Arial"}
+                            )
+                        ], style={"display": "flex", "flexDirection": "column"}),
 
-    # Tabs
-    dcc.Tabs(id="tabs", value="trend", children=[
-    dcc.Tab(label="📈 Trade Volume by Year", value="trend", style={"fontFamily": "Arial"}),
-    dcc.Tab(label="🌍 Trade by Country", value="country", style={"fontFamily": "Arial"}),
-    dcc.Tab(label="📦 Trade by Product", value="product", style={"fontFamily": "Arial"}),
-    dcc.Tab(label="🌍📦 Top Products per Country ", value="country_products", style={"fontFamily": "Arial"}),
-    dcc.Tab(label="📈 Trade Trend per Product", value="trend_hs", style={"fontFamily": "Arial"}),
-    dcc.Tab(label="📂 Treemap", value="treemap_hs", style={"fontFamily": "Arial"})
-    ],
-    persistence=True,             # Merkt sich den gewählten Tab
-    persistence_type="session",   # Gilt pro Sitzung
-    style={"fontFamily": "Arial"}),
+                        # Country
+                        html.Div([
+                            html.Label("Country:", style={"fontFamily": "Arial", "font-weight": "bold"}),
+                            dcc.Dropdown(
+                                id="country",
+                                options=[{"label": l, "value": l} for l in sorted(df["country_en"].unique())],
+                                multi=True,
+                                style={"width": "150px", "fontFamily": "Arial"}
+                            )
+                        ], style={"display": "flex", "flexDirection": "column"}),
+
+                        # Tariff Level
+                        html.Div([
+                            html.Label("Custom tariff level:", style={"fontFamily": "Arial", "font-weight": "bold"}),
+                            dcc.Dropdown(
+                                id="hs_level",
+                                options=[
+                                    {"label": "2 digit - broad groups", "value": "HS2_Description"},
+                                    {"label": "4 digit - groups", "value": "HS4_Description"},
+                                    {"label": "6 digit - products", "value": "HS6_Description"},
+                                    {"label": "8 digit - detailed products", "value": "HS8_Description"},
+                                ],
+                                value="HS6_Description",
+                                clearable=False,
+                                style={"width": "180px", "fontFamily": "Arial"}
+                            )
+                        ], style={"display": "flex", "flexDirection": "column"}),
+
+                        # Description (Mantine MultiSelect)
+                        html.Div([
+                            html.Label("Description:", style={"fontFamily": "Arial", "font-weight": "bold"}),
+                            dmc.MultiSelect(
+                                id="product",
+                                data=[],  # wird durch Callback gefüllt
+                                searchable=True,
+                                clearable=True,
+                                nothingFoundMessage="No match",
+                                maxDropdownHeight=300,
+                                style={"width": "100%", "fontFamily": "Arial"}
+                            )
+                        ], style={"flex": 1, "display": "flex", "flexDirection": "column"})
+                    ],
+                    style={"display": "flex", "gap": "20px", "marginBottom": "20px", "width": "100%"}),
+                ]),
 
 
-    html.Div(id="tabs-content", style={"fontFamily": "Arial"}),
+                # KPIs
+                html.Div(id="kpis", style={
+                    "display": "flex",
+                    "justifyContent": "space-between",
+                    "marginBottom": "20px",
+                    "fontFamily": "Arial"
+                }),
 
-    # Footer
-    html.Div(
-        "This App was developped by Patrick Kull with Swiss Open Government Data",
-        style={"textAlign": "center", "marginTop": "40px", "color": "gray", "fontSize": "12px", "fontFamily": "Arial"}
+                # Tabs
+                dcc.Tabs(id="tabs", value="trend", children=[
+                    dcc.Tab(label="📈 Trade Volume by Year", value="trend"),
+                    dcc.Tab(label="🌍 Trade by Country", value="country"),
+                    dcc.Tab(label="📦 Trade by Product", value="product"),
+                    dcc.Tab(label="🌍📦 Top Products per Country", value="country_products"),
+                    dcc.Tab(label="📈 Trade Trend per Product", value="trend_hs"),
+                    dcc.Tab(label="📂 Treemap", value="treemap_hs"),
+                    dcc.Tab(label="🌐 Sankey Trade Flow", value="sankey"),
+                ], persistence=True, persistence_type="session", style={"fontFamily": "Arial"}),
+
+                html.Div(id="tabs-content", style={"fontFamily": "Arial"}),
+
+                # Footer
+                html.Div(
+                    "This App was developed by Patrick Kull with Swiss Open Government Data (opendata.swiss)",
+                    style={"textAlign": "center", "marginTop": "40px", "color": "gray", "fontSize": "12px", "fontFamily": "Arial"}
+                )
+            ])
+        ]
     )
-])
+
 
 # =========================
 # Callbacks
@@ -291,19 +398,29 @@ app.layout = html.Div([
      Input("country", "value"),
      Input("hs_level", "value"),
      Input("product", "value"),
-     Input("tabs", "value")]
+     Input("tabs", "value"),
+     Input("language", "value")]
 )
-def update_dashboard(year, country, hs_level, product, tab):
+
+def update_dashboard(year, country, hs_level, product, tab, lang):
+    labels = LANG.get(lang, LANG["en"])  # fallback: englisch
     dff = df.copy()
     if country:
         dff = dff[dff["country_en"].isin(country)]
 
     if product:
-        if hs_level == "HS8_Description":
-            product_keys = [p.split(" – ")[0] for p in product]  # tn_key extrahieren
-            dff = dff[dff["tn_key"].isin(product_keys)]
+        if hs_level == "HS2_Description":
+            dff = dff[dff["HS2"].isin(product)]
+        elif hs_level == "HS4_Description":
+            dff = dff[dff["HS4"].isin(product)]
+        elif hs_level == "HS6_Description":
+            dff = dff[dff["HS6"].isin(product)]
+        elif hs_level == "HS8_Description":
+            dff = dff[dff["HS8"].isin(product)]
         else:
             dff = dff[dff[hs_level].isin(product)]
+
+
 
     dff_year = dff[dff["year"].isin(year)].copy()
 
@@ -311,34 +428,42 @@ def update_dashboard(year, country, hs_level, product, tab):
     exp_sum = dff_year.loc[dff_year["Flow"] == "Export", "chf_num"].sum()
     imp_sum = dff_year.loc[dff_year["Flow"] == "Import", "chf_num"].sum()
     balance, volume = exp_sum - imp_sum, exp_sum + imp_sum
-    year_label = f"{min(year)}–{max(year)}" if len(year) > 1 else str(year[0])
+    if not year:
+        year_label = "All years"
+    elif len(year) == 1:
+        year_label = str(year[0])
+    else:
+        year_label = f"{min(year)}–{max(year)}"
+
+
+
 
     kpis = html.Div([
         html.Div([
-            html.Div("Exports " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
+            html.Div("Exports " + year_label, style={"fontSize": "20px", "padding": "16px"}),
             html.Div(f"CHF {exp_sum:,.0f}".replace(",", "'"),
-                     style={"fontSize": "26px", "fontWeight": "bold"})
+                     style={"fontSize": "28px", "fontWeight": "bold"})
         ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_export"],
                   "backgroundColor": GRAPH_STYLE["bg_color_export"]}), #"#fdecea"
 
         html.Div([
-            html.Div("Imports " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
+            html.Div("Imports " + year_label, style={"fontSize": "20px", "padding": "16px"}),
             html.Div(f"CHF {imp_sum:,.0f}".replace(",", "'"),
-                     style={"fontSize": "26px", "fontWeight": "bold"})
+                     style={"fontSize": "28px", "fontWeight": "bold"})
         ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_import"],
                   "backgroundColor": GRAPH_STYLE["bg_color_import"]}),
 
         html.Div([
-            html.Div("Balance " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
+            html.Div("Trade balance " + year_label, style={"fontSize": "20px", "padding": "16px"}),
             html.Div(f"CHF {balance:,.0f}".replace(",", "'"),
-                     style={"fontSize": "26px", "fontWeight": "bold"})
+                     style={"fontSize": "28px", "fontWeight": "bold"})
         ], style={**GRAPH_STYLE["kpi_card"], "color": GRAPH_STYLE["color_trade"],
                   "backgroundColor": GRAPH_STYLE["bg_color_balance"]}),
 
         html.Div([
-            html.Div("Volume " + year_label, style={"fontSize": "16px", "marginBottom": "8px"}),
+            html.Div("Trade volume " + year_label, style={"fontSize": "20px", "padding": "16px"}),
             html.Div(f"CHF {volume:,.0f}".replace(",", "'"),
-                     style={"fontSize": "26px", "fontWeight": "bold"})
+                     style={"fontSize": "28px", "fontWeight": "bold"})
         ], style={**GRAPH_STYLE["kpi_card"], "color": "black",
                   "backgroundColor": GRAPH_STYLE["bg_color_trade"]})
     ], style={"display": "flex", "gap": "25px", "padding": "10px", "justifyContent": "space-evenly", "width":"100%", "height":"250px", "align-items":"center"})
@@ -382,8 +507,6 @@ def update_dashboard(year, country, hs_level, product, tab):
 
         balance["Balance"] = balance["Export"] - balance["Import"]
 
-        print("DEBUG - Flows in df_trend:", df_trend["Flow"].unique())
-        print("DEBUG - Balance Spalten:", balance.columns)
 
 
         # Länder-Label für Titel
@@ -533,47 +656,55 @@ def update_dashboard(year, country, hs_level, product, tab):
         )
 
     elif tab == "product":
-        # Aggregation: nach tn_key & Flow summieren
+        # passendes HS-Level bestimmen
+        if hs_level == "HS2_Description":
+            code_col, label_col, desc_col = "HS2", "HS2_Label", "HS2_Description"
+        elif hs_level == "HS4_Description":
+            code_col, label_col, desc_col = "HS4", "HS4_Label", "HS4_Description"
+        elif hs_level == "HS6_Description":
+            code_col, label_col, desc_col = "HS6", "HS6_Label", "HS6_Description"
+        else:
+            code_col, label_col, desc_col = "HS8", "HS8_Label", "HS8_Description"
+
+        # Aggregation nach Flow + HS-Level
         product_ranking = (
-            dff_year.groupby(["tn_key", "Flow", "HS6_Description"])["chf_num"].sum().reset_index()
+            dff_year.groupby([code_col, "Flow", desc_col])["chf_num"].sum().reset_index()
         )
 
         # Summen pro Produkt
         totals = (
-            product_ranking.groupby("tn_key")["chf_num"]
+            product_ranking.groupby(code_col)["chf_num"]
             .sum()
             .reset_index()
         )
 
-        # Sicherstellen, dass chf_num float ist
         totals["chf_num"] = pd.to_numeric(totals["chf_num"], errors="coerce")
 
         # Nur Produkte >= 10'000 CHF berücksichtigen
         totals = totals[totals["chf_num"] >= 10000]
 
-        # Top 20 auswählen (oder weniger, wenn <20 übrig sind)
+        # Top 20 auswählen
         top_products = (
             totals.sort_values("chf_num", ascending=False)
-            .head(20)["tn_key"]
+            .head(20)[code_col]
         )
 
-        # Filter auf Haupttabelle anwenden
-        product_ranking = product_ranking[product_ranking["tn_key"].isin(top_products)]
-        # Eine HS8-Description pro tn_key wählen (falls mehrere → erste nehmen)
-        product_labels = (
-            product_ranking.groupby("tn_key")["HS6_Description"].first().to_dict()
-        )
-        product_ranking["HS8_Label"] = product_ranking["tn_key"].map(product_labels)
+        # Filter anwenden
+        product_ranking = product_ranking[product_ranking[code_col].isin(top_products)]
 
-        # Kürzen für Achse
+        # Label für Achse
+        product_labels = product_ranking.groupby(code_col)[desc_col].first().to_dict()
+        product_ranking["hs_label"] = product_ranking[code_col] + " – " + product_ranking[desc_col]
+
+        # Kürzen für Anzeige (nur falls nötig)
         def shorten_text(t, max_len=80):
             return t if len(t) <= max_len else t[:max_len] + "..."
+        product_ranking["hs_wrapped"] = product_ranking["hs_label"].apply(shorten_text)
 
-        product_ranking["HS8_wrapped"] = product_ranking["HS8_Label"].apply(shorten_text)
-
-        # Balken-Beschriftungen mit human_format vorbereiten
+        # Balken-Beschriftungen
         product_ranking["CHF_label"] = product_ranking["chf_num"].apply(human_format)
 
+        # Titel
         def format_years(years: list[int]) -> str:
             if not years:
                 return "All Years"
@@ -585,17 +716,13 @@ def update_dashboard(year, country, hs_level, product, tab):
                 return "LATAM"
             return ", ".join(countries)
 
-
-
-        # Labels für Titel
         years_label = format_years(year)
         countries_label = format_countries(country)
 
-
         # Plot
         fig = px.bar(
-            product_ranking, 
-            x="chf_num", y="HS8_wrapped",
+            product_ranking,
+            x="chf_num", y="hs_wrapped",
             color="Flow", orientation="h",
             title=f"📦 Trade by Product ({countries_label}, {years_label})",
             template=GRAPH_STYLE["template"],
@@ -603,17 +730,19 @@ def update_dashboard(year, country, hs_level, product, tab):
                 "Export": GRAPH_STYLE["color_export"],
                 "Import": GRAPH_STYLE["color_import"]
             },
-            text="CHF_label"   # <--- HIER die neue Spalte
+            text="CHF_label",
+            custom_data=[code_col, desc_col]   # für Hovertext
         )
 
         # Hovertext
         fig.update_traces(
-            textposition="outside",        # "inside" = im Balken, "outside" = daneben
-            insidetextanchor="start",      # bessere Platzierung für horizontale Balken
+            textposition="outside",
+            insidetextanchor="start",
             hovertemplate=(
-                "<b>Product:</b> %{y}<br>"
+                "<b>Tariff code:</b> %{customdata[0]}<br>"
+                "<b>Description:</b> %{customdata[1]}<br>"
                 "<b>Flow:</b> %{fullData.name}<br>"
-                "<b>CHF:</b> %{text}<extra></extra>"  # <--- HIER statt %{x:,.0f}
+                "<b>CHF:</b> %{text}<extra></extra>"
             )
         )
 
@@ -623,8 +752,9 @@ def update_dashboard(year, country, hs_level, product, tab):
             margin=dict(l=400, r=80, t=80, b=80)
         )
         fig = apply_standard_layout(fig, x_title="CHF", y_title="Product", legend="horizontal", height=900)
+
         content = html.Div(
-        dcc.Graph(
+            dcc.Graph(
                 id="product_ranking",
                 figure=fig,
                 style={"height": "80vh", "width": "80vw"}
@@ -673,6 +803,86 @@ def update_dashboard(year, country, hs_level, product, tab):
             })
         ])
 
+    elif tab == "sankey":
+        # HS-Level → passende Spalten
+        if hs_level == "HS2_Description":
+            code_col, label_col = "HS2", "HS2_Label"
+        elif hs_level == "HS4_Description":
+            code_col, label_col = "HS4", "HS4_Label"
+        elif hs_level == "HS6_Description":
+            code_col, label_col = "HS6", "HS6_Label"
+        else:
+            code_col, label_col = "HS8", "HS8_Label"
+
+        # Aggregation
+        dff_sankey = (
+            dff_year.groupby(["Flow", "country_en", code_col, label_col])["chf_num"]
+            .sum()
+            .reset_index()
+        )
+
+        # Node-Liste: Flow + Länder + Codes (kurz!)
+        all_nodes = (
+            list(dff_sankey["Flow"].unique())
+            + list(dff_sankey["country_en"].unique())
+            + list(dff_sankey[code_col].unique())
+        )
+        node_map = {name: i for i, name in enumerate(all_nodes)}
+
+        # Links aufbauen
+        sources, targets, values, customdata = [], [], [], []
+        for _, row in dff_sankey.iterrows():
+            # Flow → Country
+            sources.append(node_map[row["Flow"]])
+            targets.append(node_map[row["country_en"]])
+            values.append(row["chf_num"])
+            customdata.append(f"{row['Flow']} → {row['country_en']}<br>CHF {row['chf_num']:,.0f}")
+
+            # Country → Product (kurzer Code als Node, volle Info im Hover)
+            sources.append(node_map[row["country_en"]])
+            targets.append(node_map[row[code_col]])
+            values.append(row["chf_num"])
+            customdata.append(
+                f"{row['country_en']} → {row[label_col]}<br>CHF {row['chf_num']:,.0f}"
+            )
+
+        import plotly.graph_objects as go
+        fig = go.Figure(data=[go.Sankey(
+            node=dict(
+                pad=20,
+                thickness=20,
+                line=dict(color="black", width=0.5),
+                label=all_nodes,   # nur kurze Namen
+                color="lightblue"
+            ),
+            link=dict(
+                source=sources,
+                target=targets,
+                value=values,
+                customdata=customdata,
+                hovertemplate="%{customdata}<extra></extra>",
+                color="rgba(0,100,200,0.3)"
+            )
+        )])
+
+        fig.update_layout(
+            title="🔗 Trade Sankey Flow (Flow → Country → Product)",
+            font=dict(size=14, family="Arial")
+        )
+
+        content = html.Div(
+            dcc.Graph(
+                id="sankey_graph",
+                figure=fig,
+                style={"height": "90vh", "width": "90vw"}
+            ),
+            style={
+                "display": "flex",
+                "justifyContent": "center",
+                "alignItems": "center",
+                "padding": "20px",
+            }
+        )
 
 
 
@@ -921,45 +1131,41 @@ def update_trend_hs(country, hs_level):
     ], style={"display": "flex", "gap": "20px", "padding": "20px"})
 
 @app.callback(
-    Output("product", "options"),
+    Output("product", "data"),
     Input("hs_level", "value")
 )
 def update_product_options(hs_level):
-    if hs_level == "HS8_Description":
-        df_temp = df.copy()
-
-        # tn_key bereinigen: nur Ziffern, 8-stellig
-        df_temp["tn_key_str"] = (
-            df_temp["tn_key"]
-            .astype(str)
-            .str.replace("[^0-9]", "", regex=True)   # nur Zahlen behalten
-            .str.zfill(8)                           # immer 8-stellig
-        )
-
-        # Format XXXX.XXXX
-        df_temp["tn_key_fmt"] = (
-            df_temp["tn_key_str"].str[:4] + "." + df_temp["tn_key_str"].str[4:]
-        )
-
-        # Numerischen Sortierschlüssel bauen
-        df_temp["tn_key_num"] = df_temp["tn_key_str"].astype(int)
-
-        # Label für Dropdown
-        df_temp["label"] = df_temp["tn_key_fmt"] + " – " + df_temp["HS8_Description"]
-
-        # 🔹 Hier numerisch sortieren
-        df_temp = df_temp.sort_values("tn_key_num")
-
-        options = [
-            {"label": row["label"], "value": row["label"]}
-            for _, row in df_temp[["label"]].drop_duplicates().iterrows()
-        ]
+    if hs_level == "HS2_Description":
+        df_temp = df[["HS2", "HS2_Label"]].drop_duplicates().sort_values("HS2")
+        options = [{"label": row["HS2_Label"], "value": row["HS2"]} for _, row in df_temp.iterrows()]
+    elif hs_level == "HS4_Description":
+        df_temp = df[["HS4", "HS4_Label"]].drop_duplicates().sort_values("HS4")
+        options = [{"label": row["HS4_Label"], "value": row["HS4"]} for _, row in df_temp.iterrows()]
+    elif hs_level == "HS6_Description":
+        df_temp = df[["HS6", "HS6_Label"]].drop_duplicates().sort_values("HS6")
+        options = [{"label": row["HS6_Label"], "value": row["HS6"]} for _, row in df_temp.iterrows()]
     else:
-        options = [
-            {"label": p, "value": p} for p in sorted(df[hs_level].unique())
-        ]
+        df_temp = df[["HS8", "HS8_Label"]].drop_duplicates().sort_values("HS8")
+        options = [{"label": row["HS8_Label"], "value": row["HS8"]} for _, row in df_temp.iterrows()]
 
     return options
+
+
+@app.callback(
+    Output("tabs", "children"),
+    Input("language", "value")
+)
+def update_tabs(lang):
+    labels = LANG.get(lang, LANG["en"])
+    return [
+        dcc.Tab(label=labels["tab_trend"], value="trend"),
+        dcc.Tab(label=labels["tab_country"], value="country"),
+        dcc.Tab(label=labels["tab_product"], value="product"),
+        dcc.Tab(label=labels["tab_country_products"], value="country_products"),
+        dcc.Tab(label=labels["tab_trend_hs"], value="trend_hs"),
+        dcc.Tab(label=labels["tab_treemap"], value="treemap_hs"),
+        dcc.Tab(label=labels["tab_sankey"], value="sankey"),
+    ]
 
 
 # =========================
