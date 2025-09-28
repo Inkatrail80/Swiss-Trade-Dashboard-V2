@@ -270,7 +270,7 @@ app.layout = dmc.MantineProvider(
                 ],
                 style={
                     "textAlign": "center",
-                    "marginBottom": "40px",
+                    "margin": "25px",
                     "padding": "20px",
                     "borderRadius": "12px",
                     "background": "linear-gradient(145deg, #f9f9f9, #e8eef7)",
@@ -355,7 +355,7 @@ app.layout = dmc.MantineProvider(
                             )
                         ], style={"flex": 1, "display": "flex", "flexDirection": "column"})
                     ],
-                    style={"display": "flex", "gap": "20px", "marginBottom": "20px", "width": "100%"}),
+                    style={"display": "flex", "gap": "20px", "margin": "25px", "width": "100vw"}),
                 ]),
 
 
