@@ -540,39 +540,54 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
         # Trade Trend (Exports + Imports + Balance)
         # ---------------------------
 
-        # Basisdaten aggregieren
-        df_trend = dff.groupby(["year", "Flow"])["chf_num"].sum().reset_index()
-
-        # Sicherstellen, dass für jedes Jahr beide Flows existieren
-        years = df_trend["year"].unique()
+        # Jahre immer vom Gesamtdatensatz
+        min_year, max_year = int(df["year"].min()), int(df["year"].max())
+        all_years = list(range(min_year, max_year + 1))
         flows = ["Export", "Import"]
-        full_index = pd.MultiIndex.from_product([years, flows], names=["year", "Flow"])
 
+        # 👉 Basierend auf df (NICHT auf dff_year mit Year-Filter)
+        dff_trend = df.copy()
+
+        # nur Country / Product filtern
+        if country:
+            dff_trend = dff_trend[dff_trend["country_en"].isin(country)]
+        if product:
+            if hs_level == "HS2_Description":
+                dff_trend = dff_trend[dff_trend["HS2"].isin(product)]
+            elif hs_level == "HS4_Description":
+                dff_trend = dff_trend[dff_trend["HS4"].isin(product)]
+            elif hs_level == "HS6_Description":
+                dff_trend = dff_trend[dff_trend["HS6"].isin(product)]
+            elif hs_level == "HS8_Description":
+                dff_trend = dff_trend[dff_trend["HS8"].isin(product)]
+            else:
+                dff_trend = dff_trend[dff_trend[hs_level].isin(product)]
+
+        # Aggregation
+        df_trend = dff_trend.groupby(["year", "Flow"])["chf_num"].sum().reset_index()
+
+        # MultiIndex für alle Jahre × Flows
+        full_index = pd.MultiIndex.from_product([all_years, flows], names=["year", "Flow"])
         df_trend = (
             df_trend.set_index(["year", "Flow"])
             .reindex(full_index, fill_value=0)
             .reset_index()
         )
 
-        # Balance berechnen (Export - Import) – robust
+        # Balance berechnen
         balance = (
             df_trend.pivot(index="year", columns="Flow", values="chf_num")
             .fillna(0)
         )
-
-        # fehlende Spalten sicherstellen
-        for col in ["Export", "Import"]:
+        for col in flows:
             if col not in balance.columns:
                 balance[col] = 0
-
         balance["Balance"] = balance["Export"] - balance["Import"]
-
-
 
         # Länder-Label für Titel
         country_label = ", ".join(country) if country else "LATAM"
 
-        # Gestapelte Balken (Export + Import)
+        # 📊 Export + Import Balken
         fig = px.bar(
             df_trend,
             x="year",
@@ -587,24 +602,32 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
             }
         )
 
-        # Balance-Linie hinzufügen
+        # ➕ Balance-Linie
         fig.add_scatter(
             x=balance.index,
             y=balance["Balance"],
             mode="lines+markers+text",
             name="Balance",
             line=dict(color=GRAPH_STYLE["color_trade"], width=5, dash="dot"),
-            marker=dict(size=16, symbol="circle"),
+            marker=dict(size=12, symbol="circle"),
             text=[human_format(v) for v in balance["Balance"]],
             textposition="top center",
             hovertemplate="<b>Year:</b> %{x}<br><b>Balance:</b> %{y:,.0f}<extra></extra>"
         )
 
-        # Hovertexte für Balken
+        # Hovertexte fix
         fig.update_traces(
             hovertemplate="<b>Year:</b> %{x}<br><b>Flow:</b> %{fullData.name}<br><b>CHF:</b> %{y:,.0f}<extra></extra>",
             selector=dict(type="bar")
         )
+
+        # Fixe X-Achse für alle Jahre
+        fig.update_xaxes(
+            tickmode="linear",
+            dtick=1,
+            range=[min_year - 0.5, max_year + 0.5]
+        )
+
 
         # Layout
         fig = apply_standard_layout(
@@ -629,6 +652,8 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                 "padding": "20px",
             }
         )
+
+
 
 
     elif tab == "trend_hs":
