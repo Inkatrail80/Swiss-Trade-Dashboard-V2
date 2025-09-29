@@ -229,146 +229,149 @@ HOVERTEXTS = {
 app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
 server = app.server
 
+# =========================
+# App Layout
+# =========================
 app.layout = dmc.MantineProvider(
-        theme={
-            "fontFamily": "Arial, sans-serif",
-            "primaryColor": "red",   # 🇨🇭 kannst du ändern
-        },
-        children=[
+    theme={
+        "fontFamily": "Arial, sans-serif",
+        "primaryColor": "red",   # 🇨🇭 kannst du ändern
+    },
+    children=[
+        html.Div([
+
+            # =========================
+            # Header
+            # =========================
             html.Div([
+                html.H1(
+                    "Swiss Trade Insights",
+                    style={
+                        "margin": "0",
+                        "fontFamily": "Arial, sans-serif",
+                        "fontSize": "48px",
+                        "fontWeight": "bold",
+                        "background": "linear-gradient(90deg, #D52B1E, #022B7E)",
+                        "WebkitBackgroundClip": "text",
+                        "WebkitTextFillColor": "transparent",
+                        "textAlign": "center",
+                        "letterSpacing": "2px",
+                    }
+                ),
+                html.H3(
+                    "LATAM 2019–2024",
+                    style={
+                        "marginTop": "10px",
+                        "color": "#555",
+                        "fontFamily": "Arial, sans-serif",
+                        "fontSize": "22px",
+                        "fontStyle": "italic",
+                        "textAlign": "center",
+                        "letterSpacing": "1px",
+                    }
+                )
+            ],
+            style={
+                "textAlign": "center",
+                "margin": "25px",
+                "padding": "20px",
+                "borderRadius": "12px",
+                "background": "linear-gradient(145deg, #f9f9f9, #e8eef7)",
+                "boxShadow": "4px 6px 15px rgba(0,0,0,0.15)",
+            }),
 
-                # =========================
-                # Header
-                # =========================
+            # =========================
+            # Filters
+            # =========================
+            html.Div([
+                # Language
                 html.Div([
-                    html.H1(
-                        "Swiss Trade Insights",
-                        style={
-                            "margin": "0",
-                            "fontFamily": "Arial, sans-serif",
-                            "fontSize": "48px",
-                            "fontWeight": "bold",
-                            "background": "linear-gradient(90deg, #D52B1E, #022B7E)",
-                            "WebkitBackgroundClip": "text",
-                            "WebkitTextFillColor": "transparent",
-                            "textAlign": "center",
-                            "letterSpacing": "2px",
-                        }
-                    ),
-                    html.H3(
-                        "LATAM 2019–2024",
-                        style={
-                            "marginTop": "10px",
-                            "color": "#555",
-                            "fontFamily": "Arial, sans-serif",
-                            "fontSize": "22px",
-                            "fontStyle": "italic",
-                            "textAlign": "center",
-                            "letterSpacing": "1px",
-                        }
+                    html.Label(id="lang_label", style={"fontWeight": "bold"}),
+                    dmc.Select(
+                        id="language",
+                        data=[
+                            {"label": "English", "value": "en"},
+                            {"label": "Español", "value": "es"},
+                        ],
+                        value="en",
+                        clearable=False,
+                        required=True,
+                        style={"width": 180}
                     )
-                ],
-                style={
-                    "textAlign": "center",
-                    "margin": "25px",
-                    "padding": "20px",
-                    "borderRadius": "12px",
-                    "background": "linear-gradient(145deg, #f9f9f9, #e8eef7)",
-                    "boxShadow": "4px 6px 15px rgba(0,0,0,0.15)",
-                }),
+                ], style={"marginBottom": "20px"}),
 
-                # =========================
-                # Filters
-                # =========================
+                # Year
                 html.Div([
-                    # Language separat
-                    # Language
-                    html.Div([
-                        html.Label(id="lang_label", style={"fontWeight": "bold"}),
-                        dmc.Select(
-                            id="language",
-                            data=[
-                                {"label": "English", "value": "en"},
-                                {"label": "Español", "value": "es"},
-                            ],
-                            value="en",
-                            clearable=False,
-                            required=True,
-                            style={"width": 180}
-                        )
-                    ], style={"marginBottom": "20px"}),
+                    html.Label(id="year_label", style={"fontWeight": "bold"}),
+                    dmc.MultiSelect(
+                        id="year",
+                        data=[{"label": str(y), "value": str(int(y))} for y in sorted(df["year"].dropna().unique())],
+                        value=[str(int(df["year"].max()))],
+                        searchable=True,
+                        clearable=True,
+                        style={"width": 250}
+                    )
+                ], style={"display": "flex", "flexDirection": "column"}),
 
-                    # Year
-                    html.Div([
-                        html.Label(id="year_label", style={"fontWeight": "bold"}),
-                        dmc.MultiSelect(
-                            id="year",
-                            data=[{"label": str(y), "value": str(int(y))} for y in sorted(df["year"].dropna().unique())],
-                            value=[str(int(df["year"].max()))],
-                            searchable=True,
-                            clearable=True,
-                            style={"width": 250}
-                        )
-                    ], style={"display": "flex", "flexDirection": "column"}),
+                # Country
+                html.Div([
+                    html.Label(id="country_label", style={"fontWeight": "bold"}),
+                    dmc.MultiSelect(
+                        id="country",
+                        data=[{"label": l, "value": l} for l in sorted(df["country_en"].unique())],
+                        searchable=True,
+                        clearable=True,
+                        style={"width": 300}
+                    )
+                ], style={"display": "flex", "flexDirection": "column"}),
 
-                    # Country
-                    html.Div([
-                        html.Label(id="country_label", style={"fontWeight": "bold"}),
-                        dmc.MultiSelect(
-                            id="country",
-                            data=[{"label": l, "value": l} for l in sorted(df["country_en"].unique())],
-                            searchable=True,
-                            clearable=True,
-                            style={"width": 300}
-                        )
-                    ], style={"display": "flex", "flexDirection": "column"}),
+                # Tariff Level
+                html.Div([
+                    html.Label(id="hs_level_label", style={"fontWeight": "bold"}),
+                    dmc.Select(
+                        id="hs_level",
+                        data=[
+                            {"label": "2 digit - broad groups", "value": "HS2_Description"},
+                            {"label": "4 digit - groups", "value": "HS4_Description"},
+                            {"label": "6 digit - products", "value": "HS6_Description"},
+                            {"label": "8 digit - detailed products", "value": "HS8_Description"},
+                        ],
+                        value="HS6_Description",
+                        clearable=False,
+                        required=True,
+                        style={"width": 280}
+                    )
+                ], style={"display": "flex", "flexDirection": "column"}),
 
-                    # Tariff Level
-                    html.Div([
-                        html.Label(id="hs_level_label", style={"fontWeight": "bold"}),
-                        dmc.Select(
-                            id="hs_level",
-                            data=[
-                                {"label": "2 digit - broad groups", "value": "HS2_Description"},
-                                {"label": "4 digit - groups", "value": "HS4_Description"},
-                                {"label": "6 digit - products", "value": "HS6_Description"},
-                                {"label": "8 digit - detailed products", "value": "HS8_Description"},
-                            ],
-                            value="HS6_Description",
-                            clearable=False,
-                            required=True,
-                            style={"width": 280}
-                        )
-                    ], style={"display": "flex", "flexDirection": "column"}),
+                # Description
+                html.Div([
+                    html.Label(id="product_label", style={"fontWeight": "bold"}),
+                    dmc.MultiSelect(
+                        id="product",
+                        data=[],  # wird durch Callback gefüllt
+                        searchable=True,
+                        clearable=True,
+                        nothingFoundMessage="No results",
+                        maxDropdownHeight=500,
+                        style={"width": "100%", "fontFamily": "Arial", "fontSize": "16px"}
+                    )
+                ], style={"flex": 1, "display": "flex", "flexDirection": "column"}),
 
-                        # Description (Mantine MultiSelect)
-                        html.Div([
-                            html.Label(id="product_label", style={"fontWeight": "bold"}),
-                            dmc.MultiSelect(
-                                id="product",
-                                data=[],  # wird durch Callback gefüllt
-                                searchable=True,
-                                clearable=True,
-                                nothingFoundMessage="No results",
-                                maxDropdownHeight=500,
-                                style={"width": "100%", "fontFamily": "Arial", "font-size":"16px"}
-                            )
-                        ], style={"flex": 1, "display": "flex", "flexDirection": "column"})
-                    ],
-                    style={"display": "flex", "gap": "20px", "margin": "25px", "width": "100vw"}),
-                ]),
+            ], style={"display": "flex", "gap": "20px", "margin": "25px", "width": "100vw"}),
 
+            # KPIs
+            html.Div(id="kpis", style={
+                "display": "flex",
+                "justifyContent": "space-between",
+                "marginBottom": "20px",
+                "fontFamily": "Arial"
+            }),
 
-                # KPIs
-                html.Div(id="kpis", style={
-                    "display": "flex",
-                    "justifyContent": "space-between",
-                    "marginBottom": "20px",
-                    "fontFamily": "Arial"
-                }),
-
-                # Tabs
-                dcc.Tabs(id="tabs", value="trend", children=[
+            # Tabs
+            dcc.Tabs(
+                id="tabs",
+                value="trend",
+                children=[
                     dcc.Tab(label="📈 Trade Volume by Year", value="trend"),
                     dcc.Tab(label="🌍 Trade by Country", value="country"),
                     dcc.Tab(label="📦 Trade by Product", value="product"),
@@ -376,16 +379,22 @@ app.layout = dmc.MantineProvider(
                     dcc.Tab(label="📈 Trade Trend per Product", value="trend_hs"),
                     dcc.Tab(label="📂 Treemap", value="treemap_hs"),
                     dcc.Tab(label="🌐 Sankey Trade Flow", value="sankey"),
-                ], persistence=True, persistence_type="session", style={"fontFamily": "Arial"}),
+                ],
+                persistence=True,
+                persistence_type="session",
+                style={"fontFamily": "Arial"}
+            ),
 
-                html.Div(id="tabs-content", style={"fontFamily": "Arial"}),
+            html.Div(id="tabs-content", style={"fontFamily": "Arial"}),
 
-                # Footer
-                html.Div(
-                    "This App was developed by Patrick Kull with Swiss Open Government Data (opendata.swiss)",
-                    style={"textAlign": "center", "marginTop": "40px", "color": "gray", "fontSize": "12px", "fontFamily": "Arial"}
-                )
-            ])
+            # Footer
+            html.Div(
+                "This App was developed by Patrick Kull with Swiss Open Government Data (opendata.swiss)",
+                style={"textAlign": "center", "marginTop": "40px", "color": "gray", "fontSize": "12px", "fontFamily": "Arial"}
+            )
+        ])
+    ]
+)
 
 
 # =========================
