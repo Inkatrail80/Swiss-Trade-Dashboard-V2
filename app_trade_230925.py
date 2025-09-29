@@ -405,8 +405,6 @@ app.layout = dmc.MantineProvider(
 
 def update_dashboard(year, country, hs_level, product, tab, lang):
 
-    print(f"DEBUG - year param: {year}, type: {type(year)}")
-    print(f"DEBUG - dff_year shape: {dff_year.shape}")
 
     # === Fallbacks erzwingen ===
     if not hs_level:
@@ -431,7 +429,8 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
             dff = dff[dff["HS8"].isin(product)]
         else:
             dff = dff[dff[hs_level].isin(product)]
-
+    print(f"DEBUG - dff_year shape: {dff_year.shape}")  # ← Now it's safe
+    print(f"DEBUG - dff_year empty?: {dff_year.empty}")  # ← Add this too
 
 
         # FIX: If no years selected, use all years
