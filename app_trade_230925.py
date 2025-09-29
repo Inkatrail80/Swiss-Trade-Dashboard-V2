@@ -357,7 +357,7 @@ app.layout = dmc.MantineProvider(
                     )
                 ], style={"flex": 1, "display": "flex", "flexDirection": "column"}),
 
-            ], style={"display": "flex", "gap": "20px", "margin": "25px", "width": "100vw"}),
+            ], style={"display": "flex", "gap": "20px", "margin": "25px auto", "width": "90%", "justifyContent": "center"}),
 
             # KPIs
             html.Div(id="kpis", style={
