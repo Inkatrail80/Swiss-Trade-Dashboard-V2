@@ -358,7 +358,7 @@ app.layout = dmc.MantineProvider(
                     style={"display": "flex", "gap": "20px", "margin": "25px", "width": "100vw"}),
                 ]),
 
-    
+
                 # KPIs
                 html.Div(id="kpis", style={
                     "display": "flex",
@@ -405,6 +405,9 @@ app.layout = dmc.MantineProvider(
 
 def update_dashboard(year, country, hs_level, product, tab, lang):
 
+    print(f"DEBUG - year param: {year}, type: {type(year)}")
+    print(f"DEBUG - dff_year shape: {dff_year.shape}")
+
     # === Fallbacks erzwingen ===
     if not hs_level:
         hs_level = "HS6_Description"
@@ -431,7 +434,11 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
 
 
 
-    dff_year = dff[dff["year"].isin(years)].copy()
+        # FIX: If no years selected, use all years
+    if years:
+        dff_year = dff[dff["year"].isin(years)].copy()
+    else:
+        dff_year = dff.copy()  # Use all available data
 
     # ================= KPIs =================
     exp_sum = dff_year.loc[dff_year["Flow"] == "Export", "chf_num"].sum()
