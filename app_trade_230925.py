@@ -1064,8 +1064,6 @@ def update_tabs(lang):
         dcc.Tab(label=labels["tab_product"], value="product"),
         dcc.Tab(label=labels["tab_country_products"], value="country_products"),
         dcc.Tab(label=labels["tab_trend_hs"], value="trend_hs"),
-        dcc.Tab(label=labels["tab_treemap"], value="treemap_hs"),
-        dcc.Tab(label=labels["tab_sankey"], value="sankey"),
     ]
 
 @app.callback(
