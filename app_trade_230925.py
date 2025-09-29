@@ -8,6 +8,7 @@ import humanize
 from translations import LANG
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
+from flask_caching import Cache
 
 
 # =========================
@@ -135,8 +136,45 @@ GRAPH_STYLE = {
 }
 
 # =========================
+# App
+# =========================
+app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
+server = app.server
+
+
+# Cache konfigurieren (für Render reicht "simple")
+cache = Cache(app.server, config={
+    "CACHE_TYPE": "simple",    # lokal im RAM
+    "CACHE_DEFAULT_TIMEOUT": 300  # Sekunden (5 min)
+})
+
+# =========================
 # Hilfsfunktionen
 # =========================
+
+
+@cache.memoize()
+def get_filtered_data(year, country, hs_level, product):
+    """Gefiltertes DataFrame zurückgeben (mit Cache)."""
+    dff = df
+
+    if product:
+        if hs_level == "HS2_Description":
+            dff = dff.loc[dff["HS2"].isin(product)]
+        elif hs_level == "HS4_Description":
+            dff = dff.loc[dff["HS4"].isin(product)]
+        elif hs_level == "HS6_Description":
+            dff = dff.loc[dff["HS6"].isin(product)]
+        elif hs_level == "HS8_Description":
+            dff = dff.loc[dff["HS8"].isin(product)]
+        else:
+            dff = dff.loc[dff[hs_level].isin(product)]
+    if year:
+        years = [int(y) for y in year]
+        dff = dff.loc[dff["year"].isin(years)]
+
+    return dff
+
 
 # Hilfsfunktion: wrappe Texte (z. B. HS-Beschreibungen)
 def wrap_text(s, width=30):
@@ -223,11 +261,7 @@ HOVERTEXTS = {
     )
 }
 
-# =========================
-# App
-# =========================
-app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
-server = app.server
+
 
 # =========================
 # App Layout
@@ -412,7 +446,6 @@ app.layout = dmc.MantineProvider(
 
 def update_dashboard(year, country, hs_level, product, tab, lang):
 
-
     # === Fallbacks erzwingen ===
     if not hs_level:
         hs_level = "HS6_Description"
@@ -421,9 +454,10 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
 
     labels = LANG.get(lang, LANG["en"])  # fallback: englisch
     years = [int(y) for y in year] if year else []
-    dff = df.copy()
+    dff = get_filtered_data(year, country, hs_level, product)
     if country:
-        dff = dff[dff["country_en"].isin(country)]
+        dff = dff.loc[df["country_en"].isin(country)]
+
 
     if product:
         if hs_level == "HS2_Description":
@@ -843,11 +877,12 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
 
 def update_country_products(selected_countries, years, top_n):
 
+    dff_tab = get_filtered_data(years, selected_countries, "HS6_Description", None)
+    # Filter auf positive Werte
+    dff_tab = dff_tab[dff_tab["chf_num"] > 0]
     years = [int(y) for y in years] if years else []
     top_n = int(top_n)
-    # Daten nach Jahren filtern (globaler Filter)
-    dff_tab = df[df["year"].isin(years)].copy()
-    dff_tab = dff_tab[dff_tab["chf_num"] > 0]
+
 
     # Basisdaten: Land x Flow x Produkt
     data = (
@@ -949,6 +984,9 @@ def update_country_products(selected_countries, years, top_n):
 )
 
 def update_trend_hs(country, hs_level):
+
+    # hier bewusst keine Produkte → nur Country-Filter
+    dff_hs = get_filtered_data(None, country, hs_level, None)
     all_years = df["year"].dropna().unique()
     min_year, max_year = int(all_years.min()), int(all_years.max())
 
