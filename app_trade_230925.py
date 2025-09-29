@@ -15,16 +15,17 @@ import dash_mantine_components as dmc
 # =========================
 df = pd.read_csv("trade_subset_latam.csv.gz", sep=";", encoding="utf-8", compression="gzip")
 
-# Datatypes
-df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
-df["chf_num"] = pd.to_numeric(df["chf_num"], errors="coerce").fillna(0).astype(float)
+# CRITICAL: Optimize datatypes to reduce memory by ~70%
+df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int16")  
+df["chf_num"] = pd.to_numeric(df["chf_num"], errors="coerce").fillna(0).astype("float32")
 
+# Convert strings to categories (huge memory savings)
 for col in ["country_en", "HS2_Description", "HS4_Description", "HS6_Description", "HS8_Description", "traffic"]:
     if col in df.columns:
-        df[col] = df[col].fillna("Unknown").astype(str)
+        df[col] = df[col].astype("category")
 
 # Flow-Mapping
-df["Flow"] = df["traffic"].map({"EXP": "Export", "IMP": "Import"}).fillna(df["traffic"])
+df["Flow"] = df["traffic"].map({"EXP": "Export", "IMP": "Import"}).fillna(df["traffic"]).astype("category")
 
 
 # Einheitliches tn_key-Format (8-stellig, nur Ziffern)
