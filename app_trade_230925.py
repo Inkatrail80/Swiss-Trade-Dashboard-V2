@@ -429,8 +429,7 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
             dff = dff[dff["HS8"].isin(product)]
         else:
             dff = dff[dff[hs_level].isin(product)]
-    print(f"DEBUG - dff_year shape: {dff_year.shape}")  # ← Now it's safe
-    print(f"DEBUG - dff_year empty?: {dff_year.empty}")  # ← Add this too
+
 
 
         # FIX: If no years selected, use all years
@@ -438,6 +437,10 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
         dff_year = dff[dff["year"].isin(years)].copy()
     else:
         dff_year = dff.copy()  # Use all available data
+
+    print(f"DEBUG - dff_year shape: {dff_year.shape}")  # ← Now it's safe
+    print(f"DEBUG - dff_year empty?: {dff_year.empty}")  # ← Add this too
+
 
     # ================= KPIs =================
     exp_sum = dff_year.loc[dff_year["Flow"] == "Export", "chf_num"].sum()
