@@ -713,7 +713,7 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                 marker=dict(size=12, symbol="circle"),
                 text=[human_format(v) for v in balance["Balance"]],
                 textposition="top center",
-                hovertemplate="<b>Year:</b> %{x}<br><b>Balance:</b> %{y:,.0f}<extra></extra>"
+                hovertemplate="<b>Year:</b> %{x}<br><b>Trade balance:</b> %{y:,.0f}<extra></extra>"
             )
 
             # Hovertexte fix
