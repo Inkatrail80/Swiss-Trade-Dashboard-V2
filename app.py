@@ -1103,10 +1103,11 @@ def update_country_products(selected_countries, years, top_n):
 @app.callback(
     Output("trend_hs_content", "children"),
     [Input("country", "value"),
-     Input("hs_level", "value")]
+     Input("hs_level", "value"),
+     Input("tabs", "value")]
 )
 
-def update_trend_hs(country, hs_level):
+def update_trend_hs(country, hs_level, tab):
     if not hs_level or hs_level not in {
         "HS2_Description",
         "HS4_Description",
