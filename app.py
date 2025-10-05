@@ -708,7 +708,7 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                 x=balance.index,
                 y=balance["Balance"],
                 mode="lines+markers+text",
-                name="Balance",
+                name="Trade balance",
                 line=dict(color=GRAPH_STYLE["color_trade"], width=5, dash="dot"),
                 marker=dict(size=12, symbol="circle"),
                 text=[human_format(v) for v in balance["Balance"]],
