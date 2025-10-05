@@ -191,6 +191,18 @@ GRAPH_STYLE = {
         "borderwidth": 1,
         "font": dict(size=14),
         "itemsizing": "trace"  # jeder Trace gleich breit dargestellt
+    },
+    "legend_bottom_full": {
+        "orientation": "h",
+        "y": -0.25,
+        "x": 0,
+        "xanchor": "left",
+        "yanchor": "top",
+        "bgcolor": "rgba(255,255,255,0.6)",
+        "bordercolor": "lightgray",
+        "borderwidth": 1,
+        "font": dict(size=14),
+        "itemsizing": "trace"
     }
 
 
@@ -288,6 +300,8 @@ def apply_standard_layout(fig, x_title="", y_title="", legend="horizontal", heig
         legend_cfg = GRAPH_STYLE["legend_vertical"]
     elif legend == "bottom_outside":
         legend_cfg = GRAPH_STYLE["legend_bottom_vertical"]   # neu
+    elif legend == "bottom_full":
+        legend_cfg = GRAPH_STYLE["legend_bottom_full"]
     else:
         legend_cfg = None
 
@@ -745,35 +759,10 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
 
 
     elif tab == "trend_hs":
-        content = html.Div([
-            html.Div([
-                html.Label("HS-Level:", style={
-                    "marginLeft": "20px",
-                    "fontFamily": "Arial",
-                    "lineHeight": "40px",
-                    "font-weight": "bold",
-                }),
-                dmc.Select(
-                    id="hs_level_trend",
-                    data=[
-                        {"label": "HS2", "value": "HS2_Description"},
-                        {"label": "HS4", "value": "HS4_Description"},
-                        {"label": "HS6", "value": "HS6_Description"},
-                        {"label": "HS8", "value": "HS8_Description"},
-                    ],
-                    value="HS2_Description",
-                    clearable=False,
-                    style={"width": 200}
-                ),
-            ], style={"margin": "20px", "display": "flex",
-            "alignItems": "center",   # Label + Dropdown zentrieren
-            "gap": "15px",
-            "margin": "40px"
-       }),
-
-            # 👉 nur Platzhalter, Inhalte kommen aus update_trend_hs
-            html.Div(id="trend_hs_content")
-        ])
+        content = html.Div(
+            html.Div(id="trend_hs_content"),
+            style={"padding": "20px"}
+        )
 
 
 
@@ -850,12 +839,12 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
         else:
             # Aggregation nach Flow + HS-Level
             product_ranking = (
-                dff_year.groupby([code_col, "Flow", desc_col])["chf_num"].sum().reset_index()
+                dff_year.groupby([code_col, "Flow", desc_col], observed=True)["chf_num"].sum().reset_index()
             )
 
             # Summen pro Produkt
             totals = (
-                product_ranking.groupby(code_col)["chf_num"]
+                product_ranking.groupby(code_col, observed=True)["chf_num"]
                 .sum()
                 .reset_index()
             )
@@ -1114,10 +1103,17 @@ def update_country_products(selected_countries, years, top_n):
 @app.callback(
     Output("trend_hs_content", "children"),
     [Input("country", "value"),
-     Input("hs_level_trend", "value")]
+     Input("hs_level", "value")]
 )
 
 def update_trend_hs(country, hs_level):
+    if not hs_level or hs_level not in {
+        "HS2_Description",
+        "HS4_Description",
+        "HS6_Description",
+        "HS8_Description",
+    }:
+        hs_level = "HS6_Description"
     LOGGER.debug("update_trend_hs called | countries=%s hs_level=%s", country if country else "ALL", hs_level)
 
     dff_hs = get_filtered_data(None, country, hs_level, None)
@@ -1135,7 +1131,7 @@ def update_trend_hs(country, hs_level):
     min_year, max_year = int(all_years.min()), int(all_years.max())
 
     trend_hs = (
-        dff_hs.groupby(["year", hs_level, "Flow"])["chf_num"]
+        dff_hs.groupby(["year", hs_level, "Flow"], observed=True)["chf_num"]
         .sum()
         .reset_index()
     )
@@ -1143,6 +1139,14 @@ def update_trend_hs(country, hs_level):
     if trend_hs.empty:
         empty = dcc.Graph(figure=build_empty_figure("📈 Trade Trend per Product"))
         return html.Div([empty], style={"padding": "20px"})
+
+    hs_level_labels = {
+        "HS2_Description": "HS2 (2 digit)",
+        "HS4_Description": "HS4 (4 digit)",
+        "HS6_Description": "HS6 (6 digit)",
+        "HS8_Description": "HS8 (8 digit)",
+    }
+    level_label = hs_level_labels.get(hs_level, hs_level.replace("_Description", ""))
 
     def shorten_text(t, max_len=50):
         if not isinstance(t, str):
@@ -1154,43 +1158,51 @@ def update_trend_hs(country, hs_level):
     df_exp = trend_hs[trend_hs["Flow"] == "Export"]
     df_imp = trend_hs[trend_hs["Flow"] == "Import"]
 
-    fig_exp = px.line(
-        df_exp,
-        x="year", y="chf_num",
-        color="hs_label",
-        line_group="hs_label",
-        markers=True,
-        title=f"📈 Export Trend by {hs_level.replace('_Description','')} ({min_year}–{max_year})",
-        template=GRAPH_STYLE["template"]
-    )
-    fig_exp.update_traces(
-        marker=dict(size=10),
-        hovertemplate=(
-            "<b>Year:</b> %{x}<br>"
-            "<b>Description:</b> %{fullData.name}<br>"
-            "<b>CHF:</b> %{y:,.0f}<extra></extra>"
+    if df_exp.empty:
+        fig_exp = build_empty_figure(f"📈 Export Trend by {level_label} ({min_year}–{max_year})")
+        fig_exp.update_layout(height=900)
+    else:
+        fig_exp = px.line(
+            df_exp,
+            x="year", y="chf_num",
+            color="hs_label",
+            line_group="hs_label",
+            markers=True,
+            title=f"📈 Export Trend by {level_label} ({min_year}–{max_year})",
+            template=GRAPH_STYLE["template"]
         )
-    )
-    fig_exp = apply_standard_layout(fig_exp, "Year", "CHF", legend="bottom_outside", height=900)
+        fig_exp.update_traces(
+            marker=dict(size=10),
+            hovertemplate=(
+                "<b>Year:</b> %{x}<br>"
+                "<b>Description:</b> %{fullData.name}<br>"
+                "<b>CHF:</b> %{y:,.0f}<extra></extra>"
+            )
+        )
+        fig_exp = apply_standard_layout(fig_exp, "Year", "CHF", legend="bottom_full", height=900)
 
-    fig_imp = px.line(
-        df_imp,
-        x="year", y="chf_num",
-        color="hs_label",
-        line_group="hs_label",
-        markers=True,
-        title=f"📈 Import Trend by {hs_level.replace('_Description','')} ({min_year}–{max_year})",
-        template=GRAPH_STYLE["template"]
-    )
-    fig_imp.update_traces(
-        marker=dict(size=10),
-        hovertemplate=(
-            "<b>Year:</b> %{x}<br>"
-            "<b>Description:</b> %{fullData.name}<br>"
-            "<b>CHF:</b> %{y:,.0f}<extra></extra>"
+    if df_imp.empty:
+        fig_imp = build_empty_figure(f"📈 Import Trend by {level_label} ({min_year}–{max_year})")
+        fig_imp.update_layout(height=900)
+    else:
+        fig_imp = px.line(
+            df_imp,
+            x="year", y="chf_num",
+            color="hs_label",
+            line_group="hs_label",
+            markers=True,
+            title=f"📈 Import Trend by {level_label} ({min_year}–{max_year})",
+            template=GRAPH_STYLE["template"]
         )
-    )
-    fig_imp = apply_standard_layout(fig_imp, "Year", "CHF", legend="bottom_outside", height=900)
+        fig_imp.update_traces(
+            marker=dict(size=10),
+            hovertemplate=(
+                "<b>Year:</b> %{x}<br>"
+                "<b>Description:</b> %{fullData.name}<br>"
+                "<b>CHF:</b> %{y:,.0f}<extra></extra>"
+            )
+        )
+        fig_imp = apply_standard_layout(fig_imp, "Year", "CHF", legend="bottom_full", height=900)
 
     LOGGER.debug(
         "Trend HS charts prepared | export_traces=%d import_traces=%d",
