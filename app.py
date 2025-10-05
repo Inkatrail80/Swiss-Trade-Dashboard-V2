@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from dash import Dash, dcc, html, Input, Output, State
+from dash import Dash, dcc, html, Input, Output
 import logging
 import os
 import textwrap
@@ -196,6 +196,9 @@ cache = Cache(app.server, config={
 @cache.memoize()
 def get_filtered_data(year, country, hs_level, product):
     """Gefiltertes DataFrame zurückgeben (mit Cache)."""
+    year_tuple = tuple(int(y) for y in year) if year else ()
+    country_tuple = tuple(country) if country else ()
+    product_tuple = tuple(product) if product else ()
     if hs_level and hs_level not in {
         "HS2_Description",
         "HS4_Description",
@@ -205,20 +208,20 @@ def get_filtered_data(year, country, hs_level, product):
         LOGGER.warning("Unsupported hs_level '%s' provided. Falling back to HS6_Description", hs_level)
         hs_level = "HS6_Description"
 
-    dff = df.copy()
+    dff = df
     LOGGER.debug(
         "Filtering data | years=%s countries=%s hs_level=%s product_count=%s",
-        year if year else "ALL",
-        country if country else "ALL",
+        year_tuple if year_tuple else "ALL",
+        country_tuple if country_tuple else "ALL",
         hs_level,
-        len(product) if product else 0,
+        len(product_tuple) if product_tuple else 0,
     )
 
-    if country:
-        dff = dff[dff["country_en"].isin(country)]
+    if country_tuple:
+        dff = dff[dff["country_en"].isin(country_tuple)]
         LOGGER.debug("Applied country filter -> %d rows", len(dff))
 
-    if product:
+    if product_tuple:
         hs_column = {
             "HS2_Description": "HS2",
             "HS4_Description": "HS4",
@@ -228,23 +231,16 @@ def get_filtered_data(year, country, hs_level, product):
         if hs_column not in dff.columns:
             LOGGER.error("HS column '%s' not found in dataframe columns", hs_column)
             raise KeyError(f"HS column '{hs_column}' not found")
-        dff = dff[dff[hs_column].isin(product)]
+        dff = dff[dff[hs_column].isin(product_tuple)]
         LOGGER.debug("Applied product filter (%s) -> %d rows", hs_column, len(dff))
 
-    if year:
-        years = [int(y) for y in year]
-        dff = dff[dff["year"].isin(years)]
+    if year_tuple:
+        dff = dff[dff["year"].isin(year_tuple)]
         LOGGER.debug("Applied year filter -> %d rows", len(dff))
 
     LOGGER.debug("Final filtered dataset has %d rows", len(dff))
     return dff
 
-
-# Hilfsfunktion: wrappe Texte (z. B. HS-Beschreibungen)
-def wrap_text(s, width=30):
-    if pd.isna(s):
-        return ""
-    return "<br>".join(textwrap.wrap(str(s), width=width))
 
 def wrap_and_shorten(text, wrap_width=30, max_len=60):
     if not isinstance(text, str):
@@ -300,35 +296,6 @@ def apply_standard_layout(fig, x_title="", y_title="", legend="horizontal", heig
         )
     )
     return fig
-
-
-HOVERTEXTS = {
-    "year_flow": (
-        "<b>Year:</b> %{x}<br>"
-        "<b>Flow:</b> %{fullData.name}<br>"
-        "<b>CHF:</b> %{y:,.0f}<extra></extra>"
-    ),
-    "year_product": (
-        "<b>Year:</b> %{x}<br>"
-        "<b>Product:</b> %{customdata[0]}<br>"
-        "<b>CHF:</b> %{y:,.0f}<extra></extra>"
-    ),
-    "country": (
-        "<b>Country:</b> %{y}<br>"
-        "<b>Flow:</b> %{fullData.name}<br>"
-        "<b>CHF:</b> %{x:,.0f}<extra></extra>"
-    ),
-    "product": (
-        "<b>Product:</b> %{y}<br>"
-        "<b>Flow:</b> %{fullData.name}<br>"
-        "<b>CHF:</b> %{x:,.0f}<extra></extra>"
-    ),
-    "treemap": (
-        "<b>Flow:</b> %{parent}<br>"
-        "<b>Description:</b> %{label}<br>"
-        "<b>CHF:</b> %{value:,.0f}<extra></extra>"
-    )
-}
 
 
 def build_empty_figure(title: str) -> go.Figure:
@@ -513,8 +480,6 @@ app.layout = dmc.MantineProvider(
                     dcc.Tab(label="📦 Trade by Product", value="product"),
                     dcc.Tab(label="🌍📦 Top Products per Country", value="country_products"),
                     dcc.Tab(label="📈 Trade Trend per Product", value="trend_hs"),
-                    dcc.Tab(label="📂 Treemap", value="treemap_hs"),
-                    dcc.Tab(label="🌐 Sankey Trade Flow", value="sankey"),
                 ],
                 persistence=True,
                 persistence_type="session",
@@ -557,7 +522,7 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
         lang = "en"
 
     labels = LANG.get(lang, LANG["en"])  # fallback: englisch
-    years = [int(y) for y in year] if year else []
+    years = tuple(int(y) for y in year) if year else ()
 
     LOGGER.debug(
         "update_dashboard called | years=%s countries=%s hs_level=%s product_count=%s tab=%s lang=%s",
@@ -569,7 +534,7 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
         lang,
     )
 
-    dff = get_filtered_data(year, country, hs_level, product)
+    dff = get_filtered_data(years, country, hs_level, product)
     log_dataframe_snapshot("Filtered data", dff)
 
     if years:
@@ -651,7 +616,7 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
         flows = ["Export", "Import"]
 
         # 👉 Basierend auf df (NICHT auf dff_year mit Year-Filter)
-        dff_trend = df.copy()
+        dff_trend = df
 
         # nur Country / Product filtern
         if country:
@@ -1012,185 +977,6 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
         ])
 
 
-    elif tab == "treemap_hs":
-        if dff_year.empty:
-            LOGGER.warning("Treemap tab has no data; showing placeholder")
-            treemap_fig = build_empty_figure("📂 Treemap")
-        else:
-            treemap_data = (
-                dff_year.groupby(["Flow", "country_en", "HS6_Description"])["chf_num"]
-                .sum()
-                .reset_index()
-            )
-
-            if treemap_data.empty:
-                treemap_fig = build_empty_figure("📂 Treemap")
-            else:
-                top_countries = (
-                    treemap_data.groupby("country_en")["chf_num"].sum().reset_index()
-                    .sort_values("chf_num", ascending=False)
-                    .head(15)["country_en"]
-                )
-                treemap_data = treemap_data[treemap_data["country_en"].isin(top_countries)]
-
-                frames = []
-                for (flow, country_name), group in treemap_data.groupby(["Flow", "country_en"]):
-                    if group.empty:
-                        continue
-                    best = group.nlargest(1, "chf_num")
-                    rest_sum = group["chf_num"].sum() - best["chf_num"].iloc[0]
-                    if rest_sum > 0:
-                        rest = pd.DataFrame([
-                            {
-                                "Flow": flow,
-                                "country_en": country_name,
-                                "HS6_Description": "Other products",
-                                "chf_num": rest_sum,
-                            }
-                        ])
-                        frames.append(pd.concat([best, rest], ignore_index=True))
-                    else:
-                        frames.append(best)
-
-                treemap_top = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-
-                if treemap_top.empty:
-                    treemap_fig = build_empty_figure("📂 Treemap")
-                else:
-                    treemap_top["HS6_wrapped"] = treemap_top["HS6_Description"].apply(lambda t: wrap_text(t, width=40))
-                    treemap_fig = px.treemap(
-                        treemap_top,
-                        path=["Flow", "country_en", "HS6_wrapped"],
-                        values="chf_num",
-                        color="Flow",
-                        color_discrete_map={
-                            "Export": GRAPH_STYLE["color_export"],
-                            "Import": GRAPH_STYLE["color_import"],
-                        },
-                        title="📂 Treemap: Top Product + Rest per Country",
-                    )
-                    treemap_fig.update_traces(
-                        customdata=treemap_top[["Flow", "country_en"]].values,
-                        hovertemplate=(
-                            "<b>Flow:</b> %{customdata[0]}<br>"
-                            "<b>Country:</b> %{customdata[1]}<br>"
-                            "<b>Product (HS6):</b> %{label}<br>"
-                            "<b>CHF:</b> %{value:,.0f}<extra></extra>"
-                        )
-                    )
-                    treemap_fig.update_layout(uniformtext=dict(minsize=14, mode="show"))
-                    treemap_fig = apply_standard_layout(treemap_fig, legend="horizontal", height=900)
-                    LOGGER.debug("Treemap chart prepared with %d countries", treemap_top["country_en"].nunique())
-
-        content = html.Div(
-            dcc.Graph(
-                id="treemap_graph",
-                figure=treemap_fig,
-                style={"height": "90vh", "width": "90vw"}
-            ),
-            style={
-                "display": "flex",
-                "justifyContent": "center",
-                "alignItems": "center",
-                "padding": "20px",
-            }
-        )
-
-    elif tab == "sankey":
-        if dff_year.empty:
-            LOGGER.warning("Sankey tab has no data; showing placeholder")
-            sankey_fig = build_empty_figure("🌐 Sankey Trade Flow")
-        else:
-            if hs_level == "HS2_Description":
-                code_col, label_col = "HS2", "HS2_Label"
-            elif hs_level == "HS4_Description":
-                code_col, label_col = "HS4", "HS4_Label"
-            elif hs_level == "HS6_Description":
-                code_col, label_col = "HS6", "HS6_Label"
-            else:
-                code_col, label_col = "HS8", "HS8_Label"
-
-            dff_sankey = (
-                dff_year.groupby(["Flow", "country_en", code_col, label_col])["chf_num"]
-                .sum()
-                .reset_index()
-            )
-
-            if dff_sankey.empty:
-                sankey_fig = build_empty_figure("🌐 Sankey Trade Flow")
-            else:
-                all_nodes = (
-                    list(dff_sankey["Flow"].unique())
-                    + list(dff_sankey["country_en"].unique())
-                    + list(dff_sankey[code_col].unique())
-                )
-                node_map = {name: i for i, name in enumerate(all_nodes)}
-
-                sources, targets, values, customdata = [], [], [], []
-                for _, row in dff_sankey.iterrows():
-                    flow_node = node_map[row["Flow"]]
-                    country_node = node_map[row["country_en"]]
-                    product_node = node_map[row[code_col]]
-
-                    sources.append(flow_node)
-                    targets.append(country_node)
-                    values.append(row["chf_num"])
-                    customdata.append(
-                        f"{row['Flow']} → {row['country_en']}<br>CHF {row['chf_num']:,.0f}"
-                    )
-
-                    sources.append(country_node)
-                    targets.append(product_node)
-                    values.append(row["chf_num"])
-                    customdata.append(
-                        f"{row['country_en']} → {row[label_col]}<br>CHF {row['chf_num']:,.0f}"
-                    )
-
-                sankey_fig = go.Figure(
-                    data=[
-                        go.Sankey(
-                            node=dict(
-                                pad=20,
-                                thickness=20,
-                                line=dict(color="black", width=0.5),
-                                label=all_nodes,
-                                color="lightblue",
-                            ),
-                            link=dict(
-                                source=sources,
-                                target=targets,
-                                value=values,
-                                customdata=customdata,
-                                hovertemplate="%{customdata}<extra></extra>",
-                                color="rgba(0,100,200,0.3)",
-                            ),
-                        )
-                    ]
-                )
-                sankey_fig.update_layout(
-                    title="🌐 Trade Sankey Flow (Flow → Country → Product)",
-                    font=dict(size=14, family=GRAPH_STYLE["font_family"]),
-                )
-                LOGGER.debug(
-                    "Sankey chart prepared with %d nodes and %d links",
-                    len(all_nodes),
-                    len(values),
-                )
-
-        content = html.Div(
-            dcc.Graph(
-                id="sankey_graph",
-                figure=sankey_fig,
-                style={"height": "90vh", "width": "90vw"}
-            ),
-            style={
-                "display": "flex",
-                "justifyContent": "center",
-                "alignItems": "center",
-                "padding": "20px",
-            }
-        )
-
 
     return kpis, content
 
@@ -1203,7 +989,7 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
 
 
 def update_country_products(selected_countries, years, top_n):
-    years = [int(y) for y in years] if years else []
+    years = tuple(int(y) for y in years) if years else ()
     top_n = int(top_n) if top_n else 5
 
     LOGGER.debug(
@@ -1213,7 +999,7 @@ def update_country_products(selected_countries, years, top_n):
         top_n,
     )
 
-    dff_tab = get_filtered_data(years if years else None, selected_countries, "HS6_Description", None)
+    dff_tab = get_filtered_data(years, selected_countries, "HS6_Description", None)
     dff_tab = dff_tab[dff_tab["chf_num"] > 0]
     log_dataframe_snapshot("Country products base", dff_tab)
 
@@ -1237,7 +1023,7 @@ def update_country_products(selected_countries, years, top_n):
 
     countries = selected_countries or sorted(data["country_en"].unique())
 
-    def format_years_label(values: list[int]) -> str:
+    def format_years_label(values: tuple[int, ...]) -> str:
         if not values:
             return "All years"
         if len(values) == 1:
@@ -1451,8 +1237,6 @@ def update_tabs(lang):
         dcc.Tab(label=labels["tab_product"], value="product"),
         dcc.Tab(label=labels["tab_country_products"], value="country_products"),
         dcc.Tab(label=labels["tab_trend_hs"], value="trend_hs"),
-        dcc.Tab(label=labels["tab_treemap"], value="treemap_hs"),
-        dcc.Tab(label=labels["tab_sankey"], value="sankey"),
     ]
 
 @app.callback(
@@ -1479,4 +1263,5 @@ def update_filter_labels(lang):
 # =========================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    debug_mode = os.environ.get("DASH_DEBUG", "false").lower() == "true"
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)
