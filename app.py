@@ -867,7 +867,9 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                 LOGGER.warning("No products remain after filtering; showing placeholder")
                 product_fig = build_empty_figure("📦 Trade by Product")
             else:
-                product_ranking["hs_label"] = product_ranking[code_col] + " – " + product_ranking[desc_col]
+                product_ranking["hs_label"] = (
+                    product_ranking[code_col].astype(str) + " – " + product_ranking[desc_col].astype(str)
+                )
 
                 # Kürzen für Anzeige (nur falls nötig)
                 def shorten_text(t, max_len=80):
