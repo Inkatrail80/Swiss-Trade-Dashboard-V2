@@ -127,6 +127,14 @@ LOGGER.debug(
 # =========================
 # Style
 # =========================
+HS_LEVEL_OPTIONS = [
+    {"label": "2 digit - broad groups", "value": "HS2_Description"},
+    {"label": "4 digit - groups", "value": "HS4_Description"},
+    {"label": "6 digit - products", "value": "HS6_Description"},
+    {"label": "8 digit - detailed products", "value": "HS8_Description"},
+]
+
+
 GRAPH_STYLE = {
     "font_family": "Arial",
     "font_size": 16,
@@ -191,6 +199,18 @@ GRAPH_STYLE = {
         "borderwidth": 1,
         "font": dict(size=14),
         "itemsizing": "trace"  # jeder Trace gleich breit dargestellt
+    },
+    "legend_bottom_full": {
+        "orientation": "h",
+        "y": -0.25,
+        "x": 0,
+        "xanchor": "left",
+        "yanchor": "top",
+        "bgcolor": "rgba(255,255,255,0.6)",
+        "bordercolor": "lightgray",
+        "borderwidth": 1,
+        "font": dict(size=14),
+        "itemsizing": "trace"
     }
 
 
@@ -288,6 +308,8 @@ def apply_standard_layout(fig, x_title="", y_title="", legend="horizontal", heig
         legend_cfg = GRAPH_STYLE["legend_vertical"]
     elif legend == "bottom_outside":
         legend_cfg = GRAPH_STYLE["legend_bottom_vertical"]   # neu
+    elif legend == "bottom_full":
+        legend_cfg = GRAPH_STYLE["legend_bottom_full"]
     else:
         legend_cfg = None
 
@@ -446,12 +468,7 @@ app.layout = dmc.MantineProvider(
                     html.Label(id="hs_level_label", style={"fontWeight": "bold"}),
                     dmc.Select(
                         id="hs_level",
-                        data=[
-                            {"label": "2 digit - broad groups", "value": "HS2_Description"},
-                            {"label": "4 digit - groups", "value": "HS4_Description"},
-                            {"label": "6 digit - products", "value": "HS6_Description"},
-                            {"label": "8 digit - detailed products", "value": "HS8_Description"},
-                        ],
+                        data=HS_LEVEL_OPTIONS,
                         value="HS6_Description",
                         clearable=False,
                         required=True,
@@ -755,15 +772,10 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                 }),
                 dmc.Select(
                     id="hs_level_trend",
-                    data=[
-                        {"label": "HS2", "value": "HS2_Description"},
-                        {"label": "HS4", "value": "HS4_Description"},
-                        {"label": "HS6", "value": "HS6_Description"},
-                        {"label": "HS8", "value": "HS8_Description"},
-                    ],
-                    value="HS2_Description",
+                    data=HS_LEVEL_OPTIONS,
+                    value="HS6_Description",
                     clearable=False,
-                    style={"width": 200}
+                    style={"width": 240}
                 ),
             ], style={"margin": "20px", "display": "flex",
             "alignItems": "center",   # Label + Dropdown zentrieren
@@ -878,7 +890,11 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                 LOGGER.warning("No products remain after filtering; showing placeholder")
                 product_fig = build_empty_figure("📦 Trade by Product")
             else:
-                product_ranking["hs_label"] = product_ranking[code_col] + " – " + product_ranking[desc_col]
+                product_ranking["hs_label"] = (
+                    product_ranking[code_col].astype(str)
+                    + " – "
+                    + product_ranking[desc_col].astype(str)
+                )
 
                 # Kürzen für Anzeige (nur falls nötig)
                 def shorten_text(t, max_len=80):
@@ -1134,6 +1150,11 @@ def update_trend_hs(country, hs_level):
 
     min_year, max_year = int(all_years.min()), int(all_years.max())
 
+    level_label = next(
+        (opt["label"] for opt in HS_LEVEL_OPTIONS if opt["value"] == hs_level),
+        hs_level.replace("_Description", "")
+    )
+
     trend_hs = (
         dff_hs.groupby(["year", hs_level, "Flow"])["chf_num"]
         .sum()
@@ -1160,7 +1181,7 @@ def update_trend_hs(country, hs_level):
         color="hs_label",
         line_group="hs_label",
         markers=True,
-        title=f"📈 Export Trend by {hs_level.replace('_Description','')} ({min_year}–{max_year})",
+        title=f"📈 Export Trend by {level_label} ({min_year}–{max_year})",
         template=GRAPH_STYLE["template"]
     )
     fig_exp.update_traces(
@@ -1171,7 +1192,7 @@ def update_trend_hs(country, hs_level):
             "<b>CHF:</b> %{y:,.0f}<extra></extra>"
         )
     )
-    fig_exp = apply_standard_layout(fig_exp, "Year", "CHF", legend="bottom_outside", height=900)
+    fig_exp = apply_standard_layout(fig_exp, "Year", "CHF", legend="bottom_full", height=900)
 
     fig_imp = px.line(
         df_imp,
@@ -1179,7 +1200,7 @@ def update_trend_hs(country, hs_level):
         color="hs_label",
         line_group="hs_label",
         markers=True,
-        title=f"📈 Import Trend by {hs_level.replace('_Description','')} ({min_year}–{max_year})",
+        title=f"📈 Import Trend by {level_label} ({min_year}–{max_year})",
         template=GRAPH_STYLE["template"]
     )
     fig_imp.update_traces(
@@ -1190,7 +1211,7 @@ def update_trend_hs(country, hs_level):
             "<b>CHF:</b> %{y:,.0f}<extra></extra>"
         )
     )
-    fig_imp = apply_standard_layout(fig_imp, "Year", "CHF", legend="bottom_outside", height=900)
+    fig_imp = apply_standard_layout(fig_imp, "Year", "CHF", legend="bottom_full", height=900)
 
     LOGGER.debug(
         "Trend HS charts prepared | export_traces=%d import_traces=%d",
