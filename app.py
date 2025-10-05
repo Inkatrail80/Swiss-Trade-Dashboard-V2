@@ -10,7 +10,6 @@ import humanize
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from flask_caching import Cache
 
 from translations import LANG
 
@@ -49,7 +48,7 @@ if missing_columns:
     raise ValueError(f"Dataset is missing required columns: {sorted(missing_columns)}")
 
 # Datatypes
-df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
+df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int16")
 df["chf_num"] = pd.to_numeric(df["chf_num"], errors="coerce").fillna(0).astype(float)
 
 for col in ["country_en", "HS2_Description", "HS4_Description", "HS6_Description", "HS8_Description", "traffic"]:
@@ -90,9 +89,31 @@ df["HS6_Label"] = (
 # HS8
 df["HS8"] = df["tn_key"].str[:8]
 df["HS8_Label"] = (
-    df["HS8"].str[:4] + "." + df["HS8"].str[4:] + 
+    df["HS8"].str[:4] + "." + df["HS8"].str[4:] +
     " – " + df["HS8_Description"]
 )
+
+# Speicher optimieren: kategorische Spalten und kompaktes Jahr-Format
+category_columns = [
+    "country_en",
+    "traffic",
+    "Flow",
+    "HS2",
+    "HS2_Label",
+    "HS2_Description",
+    "HS4",
+    "HS4_Label",
+    "HS4_Description",
+    "HS6",
+    "HS6_Label",
+    "HS6_Description",
+    "HS8",
+    "HS8_Label",
+    "HS8_Description",
+]
+for col in category_columns:
+    if col in df.columns:
+        df[col] = df[col].astype("category")
 
 LOGGER.debug(
     "HS codes prepared | unique HS2=%d HS4=%d HS6=%d HS8=%d",
@@ -181,21 +202,13 @@ GRAPH_STYLE = {
 app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
 server = app.server
 
-
-# Cache konfigurieren (für Render reicht "simple")
-cache = Cache(app.server, config={
-    "CACHE_TYPE": "simple",    # lokal im RAM
-    "CACHE_DEFAULT_TIMEOUT": 300  # Sekunden (5 min)
-})
-
 # =========================
 # Hilfsfunktionen
 # =========================
 
 
-@cache.memoize()
 def get_filtered_data(year, country, hs_level, product):
-    """Gefiltertes DataFrame zurückgeben (mit Cache)."""
+    """Gefiltertes DataFrame zurückgeben."""
     year_tuple = tuple(int(y) for y in year) if year else ()
     country_tuple = tuple(country) if country else ()
     product_tuple = tuple(product) if product else ()
