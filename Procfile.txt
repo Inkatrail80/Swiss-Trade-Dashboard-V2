@@ -1,1 +1,0 @@
-gunicorn app_trade_230925:server --workers=1 --threads=4 --timeout 120
