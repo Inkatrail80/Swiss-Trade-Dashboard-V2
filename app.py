@@ -374,41 +374,67 @@ app.layout = dmc.MantineProvider(
             # Header
             # =========================
             html.Div([
-                html.H1(
-                    "Swiss Trade Insights",
+                # Flex-Reihe mit Logo links und Textblock rechts
+                html.Div([
+                    html.Img(
+                        src="/assets/logo.png",
+                        style={
+                            "height": "150px",
+                            "marginRight": "100px",
+                        }
+                    ),
+
+                    # Textblock (H1 + H3 übereinander)
+                    html.Div([
+                        html.H1(
+                            "Swiss Trade Insights",
+                            style={
+                                "margin": "0",
+                                "fontFamily": "Arial, sans-serif",
+                                "fontSize": "48px",
+                                "fontWeight": "bold",
+                                "background": "linear-gradient(90deg, #D52B1E, #022B7E)",
+                                "WebkitBackgroundClip": "text",
+                                "WebkitTextFillColor": "transparent",
+                                "letterSpacing": "2px",
+                            }
+                        ),
+                        html.H3(
+                            "LATAM 2019–2024",
+                            style={
+                                "margin": "8px 0 0 0",
+                                "color": "#555",
+                                "fontFamily": "Arial, sans-serif",
+                                "fontSize": "22px",
+                                "fontStyle": "italic",
+                                "letterSpacing": "1px",
+                            }
+                        ),
+                    ],
                     style={
-                        "margin": "0",
-                        "fontFamily": "Arial, sans-serif",
-                        "fontSize": "48px",
-                        "fontWeight": "bold",
-                        "background": "linear-gradient(90deg, #D52B1E, #022B7E)",
-                        "WebkitBackgroundClip": "text",
-                        "WebkitTextFillColor": "transparent",
-                        "textAlign": "center",
-                        "letterSpacing": "2px",
-                    }
-                ),
-                html.H3(
-                    "LATAM 2019–2024",
-                    style={
-                        "marginTop": "10px",
-                        "color": "#555",
-                        "fontFamily": "Arial, sans-serif",
-                        "fontSize": "22px",
-                        "fontStyle": "italic",
-                        "textAlign": "center",
-                        "letterSpacing": "1px",
-                    }
-                )
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "justifyContent": "center",
+                        "alignItems": "flex-start",
+                        "textAlign": "left",
+                    }),
+                ],
+                style={
+                    "display": "flex",
+                    "alignItems": "center",        # vertikal zentriert
+                    "justifyContent": "center",    # zentriert Gesamtblock
+                    "textAlign": "left",
+                }),
             ],
             style={
-                "textAlign": "center",
                 "margin": "25px",
                 "padding": "20px",
                 "borderRadius": "12px",
                 "background": "linear-gradient(145deg, #f9f9f9, #e8eef7)",
                 "boxShadow": "4px 6px 15px rgba(0,0,0,0.15)",
             }),
+
+
 
             # =========================
             # Filters
