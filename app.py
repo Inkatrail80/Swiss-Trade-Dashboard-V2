@@ -3,14 +3,12 @@ from dash import Dash, dcc, html, Input, Output
 import logging
 import os
 import textwrap
-
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
 import humanize
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-
 from translations import LANG
 
 
@@ -123,7 +121,6 @@ LOGGER.debug(
     df["HS8"].nunique(dropna=True),
 )
 
-
 # =========================
 # Style
 # =========================
@@ -204,8 +201,6 @@ GRAPH_STYLE = {
         "font": dict(size=14),
         "itemsizing": "trace"
     }
-
-
 }
 
 # =========================
@@ -324,7 +319,6 @@ def apply_standard_layout(fig, x_title="", y_title="", legend="horizontal", heig
     )
     return fig
 
-
 def build_empty_figure(title: str) -> go.Figure:
     """Return a placeholder figure with a standard message."""
     fig = go.Figure()
@@ -356,8 +350,6 @@ def log_dataframe_snapshot(name: str, frame: pd.DataFrame) -> None:
             frame["year"].min() if "year" in frame.columns else "n/a",
             frame["year"].max() if "year" in frame.columns else "n/a",
         )
-
-
 
 # =========================
 # App Layout
@@ -433,8 +425,6 @@ app.layout = dmc.MantineProvider(
                 "background": "linear-gradient(145deg, #f9f9f9, #e8eef7)",
                 "boxShadow": "4px 6px 15px rgba(0,0,0,0.15)",
             }),
-
-
 
             # =========================
             # Filters
@@ -550,7 +540,6 @@ app.layout = dmc.MantineProvider(
     ]
 )
 
-
 # =========================
 # Callbacks
 # =========================
@@ -616,10 +605,6 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
         balance,
         volume,
     )
-
-
-
-
 
     kpis = html.Div([
         html.Div([
@@ -781,18 +766,11 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
             }
         )
 
-
-
-
     elif tab == "trend_hs":
         content = html.Div(
             html.Div(id="trend_hs_content"),
             style={"padding": "20px"}
         )
-
-
-
-
 
     elif tab == "country":
         if dff_year.empty:
