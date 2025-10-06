@@ -841,7 +841,7 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
 
             # Lokalisierte Flow-Namen
             country_ranking["Flow_localized"] = (
-                country_ranking["Flow"].map(flow_label_map).fillna(country_ranking["Flow"])
+                country_ranking["Flow"].astype(str).map(flow_label_map).fillna(country_ranking["Flow"].astype(str))
             )
 
             # Hauptdiagramm: Exporte + Importe (Stacked)
@@ -1410,14 +1410,16 @@ def update_product_options(hs_level):
 
 @app.callback(
     Output("tabs", "children"),
-    Input("language", "value")
+    Input("language", "value"),
+    State("tabs", "value")
 )
-def update_tabs(lang):
 
+def update_tabs(lang, current_value):
     if not lang:
-       lang = "en"  # Fallback erzwingen
+        lang = "en"
     labels = LANG.get(lang, LANG["en"])
     LOGGER.debug("update_tabs called | lang=%s", lang)
+    
     return [
         dcc.Tab(label=labels["tab_trend"], value="trend"),
         dcc.Tab(label=labels["tab_country"], value="country"),
