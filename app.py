@@ -796,50 +796,103 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
         )
 
     elif tab == "country":
+        # === Titel mit Ländern und Jahren ===
         def format_years(values: tuple[int, ...]) -> str:
             if not values:
                 return labels["label_all_years"]
             years_sorted = sorted(values)
             return ", ".join(str(y) for y in years_sorted)
 
+        def format_countries(countries) -> str:
+            if not countries:
+                return "LATAM"
+            return ", ".join(countries)
+
         years_label = format_years(years)
-        title_country = labels["chart_country_title"].format(
-            flow_info=labels["chart_country_flow_info"],
-            years=years_label,
+        countries_label = format_countries(country)
+
+        title_country = (
+            f"🌍 {labels['chart_country_title'].format(flow_info=labels['chart_country_flow_info'], years=years_label)} "
+            f"– {countries_label}"
         )
 
         if dff_year.empty:
             LOGGER.warning("Country tab has no data; showing placeholder")
             country_fig = build_empty_figure(title_country, no_data_message)
         else:
+            # Aggregation Export / Import
             country_ranking = (
                 dff_year.groupby(["country_en", "Flow"])["chf_num"].sum().reset_index()
             )
-            totals = country_ranking.groupby("country_en")["chf_num"].sum().reset_index()
+            totals = (
+                country_ranking.groupby("country_en")["chf_num"]
+                .sum().reset_index()
+            )
             top_countries = totals.sort_values("chf_num", ascending=False).head(25)["country_en"]
             country_ranking = country_ranking[country_ranking["country_en"].isin(top_countries)]
 
+            # Berechne Trade Balance pro Land
+            pivot = (
+                country_ranking.pivot(index="country_en", columns="Flow", values="chf_num")
+                .fillna(0)
+            )
+            pivot["Trade balance"] = pivot.get("Export", 0) - pivot.get("Import", 0)
+            pivot = pivot.reset_index()
+
+            # Lokalisierte Flow-Namen
             country_ranking["Flow_localized"] = (
                 country_ranking["Flow"].map(flow_label_map).fillna(country_ranking["Flow"])
             )
 
+            # Hauptdiagramm: Exporte + Importe (Stacked)
             fig = px.bar(
-                country_ranking, x="chf_num", y="country_en",
-                color="Flow_localized", barmode="stack", orientation="h",
+                country_ranking,
+                x="chf_num",
+                y="country_en",
+                color="Flow_localized",
+                barmode="stack",
+                orientation="h",
                 title=title_country,
                 template=GRAPH_STYLE["template"],
                 color_discrete_map=flow_color_map,
                 category_orders={"Flow_localized": [flow_label_map["Export"], flow_label_map["Import"]]}
             )
+
+            # ➕ Trade Balance Linie / Marker
+            fig.add_scatter(
+                x=pivot["Trade balance"],
+                y=pivot["country_en"],
+                mode="markers+text",
+                name=labels["chart_trade_volume_balance"],
+                marker=dict(
+                    color=GRAPH_STYLE["color_trade"],
+                    size=12,
+                    symbol="diamond"
+                ),
+                text=[human_format(v) for v in pivot["Trade balance"]],
+                textposition="middle right",
+                hovertemplate=(
+                    f"<b>{axis_country}:</b> %{{y}}<br>"
+                    f"<b>{labels['chart_trade_volume_balance']}:</b> %{{x:,.0f}}<extra></extra>"
+                ),
+            )
+
+            # Hover für Balken
             fig.update_traces(
                 hovertemplate=(
                     f"<b>{axis_country}:</b> %{{y}}<br>"
                     f"<b>{legend_title_flow}:</b> %{{fullData.name}}<br>"
                     f"<b>{axis_chf}:</b> %{{x:,.0f}}<extra></extra>"
-                )
+                ),
+                selector=dict(type="bar")
             )
 
-            fig.update_layout(yaxis=dict(categoryorder="total ascending"))
+            # Sortierung nach Totalwerten
+            fig.update_layout(
+                yaxis=dict(categoryorder="total ascending")
+            )
+
+            # Standardlayout anwenden
             country_fig = apply_standard_layout(
                 fig,
                 x_title=axis_chf,
@@ -848,11 +901,15 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                 height=900,
                 legend_title=legend_title_flow,
             )
-            LOGGER.debug("Country chart prepared with %d countries", country_ranking['country_en'].nunique())
+
+            LOGGER.debug(
+                "Country chart prepared with %d countries (including trade balance)",
+                country_ranking["country_en"].nunique(),
+            )
 
         content = html.Div(
             dcc.Graph(
-                id="product_ranking",
+                id="country_ranking",
                 figure=country_fig,
                 style={"height": "80vh", "width": "80vw"}
             ),
@@ -863,6 +920,7 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                 "padding": "20px",
             }
         )
+
 
     elif tab == "product":
         # passendes HS-Level bestimmen
