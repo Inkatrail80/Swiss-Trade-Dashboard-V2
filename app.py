@@ -824,24 +824,25 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
             country_ranking = (
                 dff_year.groupby(["country_en", "Flow"])["chf_num"].sum().reset_index()
             )
+
+            # Top 25 Länder nach Gesamtvolumen
             totals = (
                 country_ranking.groupby("country_en")["chf_num"]
                 .sum().reset_index()
             )
-            top_countries = totals.sort_values("chf_num", ascending=False).head(25)["country_en"]
-            country_ranking = country_ranking[country_ranking["country_en"].isin(top_countries)]
-
-            # Berechne Trade Balance pro Land
-            pivot = (
-                country_ranking.pivot(index="country_en", columns="Flow", values="chf_num")
-                .fillna(0)
+            top_countries = (
+                totals.sort_values("chf_num", ascending=False)
+                .head(25)["country_en"]
             )
-            pivot["Trade balance"] = pivot.get("Export", 0) - pivot.get("Import", 0)
-            pivot = pivot.reset_index()
+            country_ranking = country_ranking[
+                country_ranking["country_en"].isin(top_countries)
+            ]
 
             # Lokalisierte Flow-Namen
             country_ranking["Flow_localized"] = (
-                country_ranking["Flow"].astype(str).map(flow_label_map).fillna(country_ranking["Flow"].astype(str))
+                country_ranking["Flow"].astype(str)
+                .map(flow_label_map)
+                .fillna(country_ranking["Flow"].astype(str))
             )
 
             # Hauptdiagramm: Exporte + Importe (Stacked)
@@ -855,42 +856,25 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
                 title=title_country,
                 template=GRAPH_STYLE["template"],
                 color_discrete_map=flow_color_map,
-                category_orders={"Flow_localized": [flow_label_map["Export"], flow_label_map["Import"]]}
+                category_orders={
+                    "Flow_localized": [
+                        flow_label_map["Export"],
+                        flow_label_map["Import"],
+                    ]
+                },
             )
 
-            # ➕ Trade Balance Linie / Marker
-            fig.add_scatter(
-                x=pivot["Trade balance"],
-                y=pivot["country_en"],
-                mode="markers+text",
-                name=labels["chart_trade_volume_balance"],
-                marker=dict(
-                    color=GRAPH_STYLE["color_trade"],
-                    size=12,
-                    symbol="diamond"
-                ),
-                text=[human_format(v) for v in pivot["Trade balance"]],
-                textposition="middle right",
-                hovertemplate=(
-                    f"<b>{axis_country}:</b> %{{y}}<br>"
-                    f"<b>{labels['chart_trade_volume_balance']}:</b> %{{x:,.0f}}<extra></extra>"
-                ),
-            )
-
-            # Hover für Balken
+            # Hover sauber formatiert
             fig.update_traces(
                 hovertemplate=(
                     f"<b>{axis_country}:</b> %{{y}}<br>"
                     f"<b>{legend_title_flow}:</b> %{{fullData.name}}<br>"
                     f"<b>{axis_chf}:</b> %{{x:,.0f}}<extra></extra>"
-                ),
-                selector=dict(type="bar")
+                )
             )
 
-            # Sortierung nach Totalwerten
-            fig.update_layout(
-                yaxis=dict(categoryorder="total ascending")
-            )
+            # Sortierung nach Totalvolumen
+            fig.update_layout(yaxis=dict(categoryorder="total ascending"))
 
             # Standardlayout anwenden
             country_fig = apply_standard_layout(
@@ -903,22 +887,23 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
             )
 
             LOGGER.debug(
-                "Country chart prepared with %d countries (including trade balance)",
+                "Country chart prepared with %d countries",
                 country_ranking["country_en"].nunique(),
             )
+        country_fig.update_layout(meta=dict(lang=lang))
 
         content = html.Div(
             dcc.Graph(
                 id="country_ranking",
                 figure=country_fig,
-                style={"height": "80vh", "width": "80vw"}
+                style={"height": "80vh", "width": "80vw"},
             ),
             style={
                 "display": "flex",
                 "justifyContent": "center",
                 "alignItems": "center",
                 "padding": "20px",
-            }
+            },
         )
 
 
