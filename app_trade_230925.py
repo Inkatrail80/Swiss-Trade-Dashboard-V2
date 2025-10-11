@@ -1,31 +1,63 @@
 # -*- coding: utf-8 -*-
 from dash import Dash, dcc, html, Input, Output, State
-import pandas as pd
-import plotly.express as px
+import logging
 import os
 import textwrap
-import humanize
-from translations import LANG
+
 import dash_bootstrap_components as dbc
 import dash_mantine_components as dmc
+import humanize
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 from flask_caching import Cache
 
+from translations import LANG
+
+
+# =========================
+# Logging configuration
+# =========================
+LOG_LEVEL = os.environ.get("APP_LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+LOGGER = logging.getLogger(__name__)
 
 # =========================
 # Load data
 # =========================
-df = pd.read_csv("trade_subset_latam.csv.gz", sep=";", encoding="utf-8", compression="gzip")
+DATA_PATH = os.environ.get("TRADE_DATA_PATH", "trade_subset_latam.csv.gz")
+LOGGER.info("Loading trade dataset from %s", DATA_PATH)
+df = pd.read_csv(DATA_PATH, sep=";", encoding="utf-8", compression="gzip")
+
+REQUIRED_COLUMNS = {
+    "year",
+    "chf_num",
+    "traffic",
+    "country_en",
+    "tn_key",
+    "HS2_Description",
+    "HS4_Description",
+    "HS6_Description",
+    "HS8_Description",
+}
+missing_columns = REQUIRED_COLUMNS - set(df.columns)
+if missing_columns:
+    LOGGER.error("Missing required columns in dataset: %s", ", ".join(sorted(missing_columns)))
+    raise ValueError(f"Dataset is missing required columns: {sorted(missing_columns)}")
 
 # Datatypes
 df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
 df["chf_num"] = pd.to_numeric(df["chf_num"], errors="coerce").fillna(0).astype(float)
 
 for col in ["country_en", "HS2_Description", "HS4_Description", "HS6_Description", "HS8_Description", "traffic"]:
-    if col in df.columns:
-        df[col] = df[col].fillna("Unknown").astype(str)
+    df[col] = df[col].fillna("Unknown").astype(str)
 
 # Flow-Mapping
 df["Flow"] = df["traffic"].map({"EXP": "Export", "IMP": "Import"}).fillna(df["traffic"])
+LOGGER.info("Dataset loaded with %d rows and %d columns", df.shape[0], df.shape[1])
 
 
 # Einheitliches tn_key-Format (8-stellig, nur Ziffern)
@@ -60,6 +92,14 @@ df["HS8"] = df["tn_key"].str[:8]
 df["HS8_Label"] = (
     df["HS8"].str[:4] + "." + df["HS8"].str[4:] + 
     " – " + df["HS8_Description"]
+)
+
+LOGGER.debug(
+    "HS codes prepared | unique HS2=%d HS4=%d HS6=%d HS8=%d",
+    df["HS2"].nunique(dropna=True),
+    df["HS4"].nunique(dropna=True),
+    df["HS6"].nunique(dropna=True),
+    df["HS8"].nunique(dropna=True),
 )
 
 
@@ -156,23 +196,47 @@ cache = Cache(app.server, config={
 @cache.memoize()
 def get_filtered_data(year, country, hs_level, product):
     """Gefiltertes DataFrame zurückgeben (mit Cache)."""
-    dff = df
+    if hs_level and hs_level not in {
+        "HS2_Description",
+        "HS4_Description",
+        "HS6_Description",
+        "HS8_Description",
+    }:
+        LOGGER.warning("Unsupported hs_level '%s' provided. Falling back to HS6_Description", hs_level)
+        hs_level = "HS6_Description"
+
+    dff = df.copy()
+    LOGGER.debug(
+        "Filtering data | years=%s countries=%s hs_level=%s product_count=%s",
+        year if year else "ALL",
+        country if country else "ALL",
+        hs_level,
+        len(product) if product else 0,
+    )
+
+    if country:
+        dff = dff[dff["country_en"].isin(country)]
+        LOGGER.debug("Applied country filter -> %d rows", len(dff))
 
     if product:
-        if hs_level == "HS2_Description":
-            dff = dff.loc[dff["HS2"].isin(product)]
-        elif hs_level == "HS4_Description":
-            dff = dff.loc[dff["HS4"].isin(product)]
-        elif hs_level == "HS6_Description":
-            dff = dff.loc[dff["HS6"].isin(product)]
-        elif hs_level == "HS8_Description":
-            dff = dff.loc[dff["HS8"].isin(product)]
-        else:
-            dff = dff.loc[dff[hs_level].isin(product)]
+        hs_column = {
+            "HS2_Description": "HS2",
+            "HS4_Description": "HS4",
+            "HS6_Description": "HS6",
+            "HS8_Description": "HS8",
+        }.get(hs_level, hs_level)
+        if hs_column not in dff.columns:
+            LOGGER.error("HS column '%s' not found in dataframe columns", hs_column)
+            raise KeyError(f"HS column '{hs_column}' not found")
+        dff = dff[dff[hs_column].isin(product)]
+        LOGGER.debug("Applied product filter (%s) -> %d rows", hs_column, len(dff))
+
     if year:
         years = [int(y) for y in year]
-        dff = dff.loc[dff["year"].isin(years)]
+        dff = dff[dff["year"].isin(years)]
+        LOGGER.debug("Applied year filter -> %d rows", len(dff))
 
+    LOGGER.debug("Final filtered dataset has %d rows", len(dff))
     return dff
 
 
@@ -205,7 +269,11 @@ def human_format(num: float) -> str:
             .replace(" trillion", "Tn"))
 
 def apply_standard_layout(fig, x_title="", y_title="", legend="horizontal", height=1000, legend_title=None):
-    if legend == "horizontal":
+    show_legend = True
+    if legend is False:
+        legend_cfg = None
+        show_legend = False
+    elif legend == "horizontal":
         legend_cfg = GRAPH_STYLE["legend_horizontal"]
     elif legend == "vertical":
         legend_cfg = GRAPH_STYLE["legend_vertical"]
@@ -226,6 +294,7 @@ def apply_standard_layout(fig, x_title="", y_title="", legend="horizontal", heig
         title=dict(font=dict(size=GRAPH_STYLE["title_size"])),
         legend=legend_cfg,
         legend_title_text=legend_title if legend_title else None,
+        showlegend=show_legend,
         hoverlabel=dict(
             align="left"
         )
@@ -260,6 +329,39 @@ HOVERTEXTS = {
         "<b>CHF:</b> %{value:,.0f}<extra></extra>"
     )
 }
+
+
+def build_empty_figure(title: str) -> go.Figure:
+    """Return a placeholder figure with a standard message."""
+    fig = go.Figure()
+    fig.add_annotation(
+        text="No data available for the current selection",
+        showarrow=False,
+        font=dict(size=18),
+        x=0.5,
+        y=0.5,
+        xref="paper",
+        yref="paper",
+    )
+    fig.update_xaxes(visible=False)
+    fig.update_yaxes(visible=False)
+    fig.update_layout(title=title)
+    return apply_standard_layout(fig, legend=False, height=600)
+
+
+def log_dataframe_snapshot(name: str, frame: pd.DataFrame) -> None:
+    """Log standard diagnostics for a dataframe snapshot."""
+    if frame.empty:
+        LOGGER.warning("%s dataframe is empty after filtering", name)
+    else:
+        LOGGER.debug(
+            "%s dataframe snapshot | rows=%d cols=%d | years=%s-%s",
+            name,
+            frame.shape[0],
+            frame.shape[1],
+            frame["year"].min() if "year" in frame.columns else "n/a",
+            frame["year"].max() if "year" in frame.columns else "n/a",
+        )
 
 
 
@@ -411,6 +513,8 @@ app.layout = dmc.MantineProvider(
                     dcc.Tab(label="📦 Trade by Product", value="product"),
                     dcc.Tab(label="🌍📦 Top Products per Country", value="country_products"),
                     dcc.Tab(label="📈 Trade Trend per Product", value="trend_hs"),
+                    dcc.Tab(label="📂 Treemap", value="treemap_hs"),
+                    dcc.Tab(label="🌐 Sankey Trade Flow", value="sankey"),
                 ],
                 persistence=True,
                 persistence_type="session",
@@ -454,33 +558,26 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
 
     labels = LANG.get(lang, LANG["en"])  # fallback: englisch
     years = [int(y) for y in year] if year else []
+
+    LOGGER.debug(
+        "update_dashboard called | years=%s countries=%s hs_level=%s product_count=%s tab=%s lang=%s",
+        years if years else "ALL",
+        country if country else "ALL",
+        hs_level,
+        len(product) if product else 0,
+        tab,
+        lang,
+    )
+
     dff = get_filtered_data(year, country, hs_level, product)
-    if country:
-        dff = dff.loc[df["country_en"].isin(country)]
+    log_dataframe_snapshot("Filtered data", dff)
 
-
-    if product:
-        if hs_level == "HS2_Description":
-            dff = dff[dff["HS2"].isin(product)]
-        elif hs_level == "HS4_Description":
-            dff = dff[dff["HS4"].isin(product)]
-        elif hs_level == "HS6_Description":
-            dff = dff[dff["HS6"].isin(product)]
-        elif hs_level == "HS8_Description":
-            dff = dff[dff["HS8"].isin(product)]
-        else:
-            dff = dff[dff[hs_level].isin(product)]
-
-
-
-        # FIX: If no years selected, use all years
     if years:
         dff_year = dff[dff["year"].isin(years)].copy()
     else:
-        dff_year = dff.copy()  # Use all available data
+        dff_year = dff.copy()
 
-    print(f"DEBUG - dff_year shape: {dff_year.shape}")  # ← Now it's safe
-    print(f"DEBUG - dff_year empty?: {dff_year.empty}")  # ← Add this too
+    log_dataframe_snapshot("Filtered data (year restricted)", dff_year)
 
 
     # ================= KPIs =================
@@ -493,6 +590,14 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
         year_label = str(years[0])
     else:
         year_label = f"{min(years)}–{max(years)}"
+
+    LOGGER.debug(
+        "KPI values | exports=%.2f imports=%.2f balance=%.2f volume=%.2f",
+        exp_sum,
+        imp_sum,
+        balance,
+        volume,
+    )
 
 
 
@@ -563,86 +668,91 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
             else:
                 dff_trend = dff_trend[dff_trend[hs_level].isin(product)]
 
-        # Aggregation
-        df_trend = dff_trend.groupby(["year", "Flow"])["chf_num"].sum().reset_index()
+        if dff_trend.empty:
+            LOGGER.warning("Trend dataset empty; returning placeholder figure")
+            trend_fig = build_empty_figure("📈 Trade Volume by Year")
+        else:
+            # Aggregation
+            df_trend = dff_trend.groupby(["year", "Flow"])["chf_num"].sum().reset_index()
 
-        # MultiIndex für alle Jahre × Flows
-        full_index = pd.MultiIndex.from_product([all_years, flows], names=["year", "Flow"])
-        df_trend = (
-            df_trend.set_index(["year", "Flow"])
-            .reindex(full_index, fill_value=0)
-            .reset_index()
-        )
+            # MultiIndex für alle Jahre × Flows
+            full_index = pd.MultiIndex.from_product([all_years, flows], names=["year", "Flow"])
+            df_trend = (
+                df_trend.set_index(["year", "Flow"])
+                .reindex(full_index, fill_value=0)
+                .reset_index()
+            )
 
-        # Balance berechnen
-        balance = (
-            df_trend.pivot(index="year", columns="Flow", values="chf_num")
-            .fillna(0)
-        )
-        for col in flows:
-            if col not in balance.columns:
-                balance[col] = 0
-        balance["Balance"] = balance["Export"] - balance["Import"]
+            # Balance berechnen
+            balance = (
+                df_trend.pivot(index="year", columns="Flow", values="chf_num")
+                .fillna(0)
+            )
+            for col in flows:
+                if col not in balance.columns:
+                    balance[col] = 0
+            balance["Balance"] = balance["Export"] - balance["Import"]
 
-        # Länder-Label für Titel
-        country_label = ", ".join(country) if country else "LATAM"
+            # Länder-Label für Titel
+            country_label = ", ".join(country) if country else "LATAM"
 
-        # 📊 Export + Import Balken
-        fig = px.bar(
-            df_trend,
-            x="year",
-            y="chf_num",
-            color="Flow",
-            barmode="stack",
-            title=f"📈 Trade Volume by Year – {country_label}",
-            template=GRAPH_STYLE["template"],
-            color_discrete_map={
-                "Export": GRAPH_STYLE["color_export"],
-                "Import": GRAPH_STYLE["color_import"]
-            }
-        )
+            # 📊 Export + Import Balken
+            fig = px.bar(
+                df_trend,
+                x="year",
+                y="chf_num",
+                color="Flow",
+                barmode="stack",
+                title=f"📈 Trade Volume by Year – {country_label}",
+                template=GRAPH_STYLE["template"],
+                color_discrete_map={
+                    "Export": GRAPH_STYLE["color_export"],
+                    "Import": GRAPH_STYLE["color_import"]
+                }
+            )
 
-        # ➕ Balance-Linie
-        fig.add_scatter(
-            x=balance.index,
-            y=balance["Balance"],
-            mode="lines+markers+text",
-            name="Balance",
-            line=dict(color=GRAPH_STYLE["color_trade"], width=5, dash="dot"),
-            marker=dict(size=12, symbol="circle"),
-            text=[human_format(v) for v in balance["Balance"]],
-            textposition="top center",
-            hovertemplate="<b>Year:</b> %{x}<br><b>Balance:</b> %{y:,.0f}<extra></extra>"
-        )
+            # ➕ Balance-Linie
+            fig.add_scatter(
+                x=balance.index,
+                y=balance["Balance"],
+                mode="lines+markers+text",
+                name="Balance",
+                line=dict(color=GRAPH_STYLE["color_trade"], width=5, dash="dot"),
+                marker=dict(size=12, symbol="circle"),
+                text=[human_format(v) for v in balance["Balance"]],
+                textposition="top center",
+                hovertemplate="<b>Year:</b> %{x}<br><b>Balance:</b> %{y:,.0f}<extra></extra>"
+            )
 
-        # Hovertexte fix
-        fig.update_traces(
-            hovertemplate="<b>Year:</b> %{x}<br><b>Flow:</b> %{fullData.name}<br><b>CHF:</b> %{y:,.0f}<extra></extra>",
-            selector=dict(type="bar")
-        )
+            # Hovertexte fix
+            fig.update_traces(
+                hovertemplate="<b>Year:</b> %{x}<br><b>Flow:</b> %{fullData.name}<br><b>CHF:</b> %{y:,.0f}<extra></extra>",
+                selector=dict(type="bar")
+            )
 
-        # Fixe X-Achse für alle Jahre
-        fig.update_xaxes(
-            tickmode="linear",
-            dtick=1,
-            range=[min_year - 0.5, max_year + 0.5]
-        )
+            # Fixe X-Achse für alle Jahre
+            fig.update_xaxes(
+                tickmode="linear",
+                dtick=1,
+                range=[min_year - 0.5, max_year + 0.5]
+            )
 
+            # Layout
+            trend_fig = apply_standard_layout(
+                fig,
+                x_title="Year",
+                y_title="CHF",
+                legend="horizontal",
+                height=900,
+                legend_title="Flow"
+            )
 
-        # Layout
-        fig = apply_standard_layout(
-            fig,
-            x_title="Year",
-            y_title="CHF",
-            legend="horizontal",
-            height=900,
-            legend_title="Flow"
-        )
+        LOGGER.debug("Trend chart prepared for %d years", len(all_years))
 
         content = html.Div(
             dcc.Graph(
                 id="trend",
-                figure=fig,
+                figure=trend_fig,
                 style={"height": "80vh", "width": "80vw"}
             ),
             style={
@@ -692,44 +802,49 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
 
 
     elif tab == "country":
-        country_ranking = (
-            dff_year.groupby(["country_en", "Flow"])["chf_num"].sum().reset_index()
-        )
-        totals = country_ranking.groupby("country_en")["chf_num"].sum().reset_index()
-        top_countries = totals.sort_values("chf_num", ascending=False).head(25)["country_en"]
-        country_ranking = country_ranking[country_ranking["country_en"].isin(top_countries)]
+        if dff_year.empty:
+            LOGGER.warning("Country tab has no data; showing placeholder")
+            country_fig = build_empty_figure("🌍 Trade by Country")
+        else:
+            country_ranking = (
+                dff_year.groupby(["country_en", "Flow"])["chf_num"].sum().reset_index()
+            )
+            totals = country_ranking.groupby("country_en")["chf_num"].sum().reset_index()
+            top_countries = totals.sort_values("chf_num", ascending=False).head(25)["country_en"]
+            country_ranking = country_ranking[country_ranking["country_en"].isin(top_countries)]
 
-        def format_years(years: list[int]) -> str:
-            """Format year selection for titles (explicit years)."""
-            if not years:
-                return "All Years"
-            years_sorted = sorted(years)
-            return ", ".join(str(y) for y in years_sorted)
+            def format_years(years: list[int]) -> str:
+                """Format year selection for titles (explicit years)."""
+                if not years:
+                    return "All Years"
+                years_sorted = sorted(years)
+                return ", ".join(str(y) for y in years_sorted)
 
-        years_label = format_years(years)
+            years_label = format_years(years)
 
-        fig = px.bar(
-            country_ranking, x="chf_num", y="country_en",
-            color="Flow", barmode="stack", orientation="h",
-            title=f"🌍 Trade by Country (Export + Import, {years_label})",
-            template=GRAPH_STYLE["template"],
-            color_discrete_map={
-                "Export": GRAPH_STYLE["color_export"],
-                "Import": GRAPH_STYLE["color_import"]
-            }
-        )
-        fig.update_traces(
+            fig = px.bar(
+                country_ranking, x="chf_num", y="country_en",
+                color="Flow", barmode="stack", orientation="h",
+                title=f"🌍 Trade by Country (Export + Import, {years_label})",
+                template=GRAPH_STYLE["template"],
+                color_discrete_map={
+                    "Export": GRAPH_STYLE["color_export"],
+                    "Import": GRAPH_STYLE["color_import"]
+                }
+            )
+            fig.update_traces(
 
-            hovertemplate="<b>Country:</b> %{y}<br><b>Flow:</b> %{fullData.name}<br><b>CHF:</b> %{x:,.0f}<extra></extra>"
-        )
+                hovertemplate="<b>Country:</b> %{y}<br><b>Flow:</b> %{fullData.name}<br><b>CHF:</b> %{x:,.0f}<extra></extra>"
+            )
 
-        fig.update_layout(yaxis=dict(categoryorder="total ascending"))
-        fig = apply_standard_layout(fig, x_title="CHF", y_title="Country", legend="horizontal", height=900)
-        
+            fig.update_layout(yaxis=dict(categoryorder="total ascending"))
+            country_fig = apply_standard_layout(fig, x_title="CHF", y_title="Country", legend="horizontal", height=900)
+            LOGGER.debug("Country chart prepared with %d countries", country_ranking['country_en'].nunique())
+
         content = html.Div(
-        dcc.Graph(
+            dcc.Graph(
                 id="product_ranking",
-                figure=fig,
+                figure=country_fig,
                 style={"height": "80vh", "width": "80vw"}
             ),
             style={
@@ -751,97 +866,104 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
         else:
             code_col, label_col, desc_col = "HS8", "HS8_Label", "HS8_Description"
 
-        # Aggregation nach Flow + HS-Level
-        product_ranking = (
-            dff_year.groupby([code_col, "Flow", desc_col])["chf_num"].sum().reset_index()
-        )
-
-        # Summen pro Produkt
-        totals = (
-            product_ranking.groupby(code_col)["chf_num"]
-            .sum()
-            .reset_index()
-        )
-
-        totals["chf_num"] = pd.to_numeric(totals["chf_num"], errors="coerce")
-
-        # Nur Produkte >= 10'000 CHF berücksichtigen
-        totals = totals[totals["chf_num"] >= 10000]
-
-        # Top 20 auswählen
-        top_products = (
-            totals.sort_values("chf_num", ascending=False)
-            .head(20)[code_col]
-        )
-
-        # Filter anwenden
-        product_ranking = product_ranking[product_ranking[code_col].isin(top_products)]
-
-        # Label für Achse
-        product_labels = product_ranking.groupby(code_col)[desc_col].first().to_dict()
-        product_ranking["hs_label"] = product_ranking[code_col] + " – " + product_ranking[desc_col]
-
-        # Kürzen für Anzeige (nur falls nötig)
-        def shorten_text(t, max_len=80):
-            return t if len(t) <= max_len else t[:max_len] + "..."
-        product_ranking["hs_wrapped"] = product_ranking["hs_label"].apply(shorten_text)
-
-        # Balken-Beschriftungen
-        product_ranking["CHF_label"] = product_ranking["chf_num"].apply(human_format)
-
-        # Titel
-        def format_years(years: list[int]) -> str:
-            if not years:
-                return "All Years"
-            years_sorted = sorted(years)
-            return ", ".join(str(y) for y in years_sorted)
-
-        def format_countries(countries: list[str]) -> str:
-            if not countries:
-                return "LATAM"
-            return ", ".join(countries)
-
-        years_label = format_years(years)
-        countries_label = format_countries(country)
-
-        # Plot
-        fig = px.bar(
-            product_ranking,
-            x="chf_num", y="hs_wrapped",
-            color="Flow", orientation="h",
-            title=f"📦 Trade by Product ({countries_label}, {years_label})",
-            template=GRAPH_STYLE["template"],
-            color_discrete_map={
-                "Export": GRAPH_STYLE["color_export"],
-                "Import": GRAPH_STYLE["color_import"]
-            },
-            text="CHF_label",
-            custom_data=[code_col, desc_col]   # für Hovertext
-        )
-
-        # Hovertext
-        fig.update_traces(
-            textposition="outside",
-            insidetextanchor="start",
-            hovertemplate=(
-                "<b>Tariff code:</b> %{customdata[0]}<br>"
-                "<b>Description:</b> %{customdata[1]}<br>"
-                "<b>Flow:</b> %{fullData.name}<br>"
-                "<b>CHF:</b> %{text}<extra></extra>"
+        if dff_year.empty:
+            LOGGER.warning("Product tab has no data; showing placeholder")
+            product_fig = build_empty_figure("📦 Trade by Product")
+        else:
+            # Aggregation nach Flow + HS-Level
+            product_ranking = (
+                dff_year.groupby([code_col, "Flow", desc_col])["chf_num"].sum().reset_index()
             )
-        )
 
-        # Layout
-        fig.update_layout(
-            yaxis=dict(categoryorder="total ascending"),
-            margin=dict(l=400, r=80, t=80, b=80)
-        )
-        fig = apply_standard_layout(fig, x_title="CHF", y_title="Product", legend="horizontal", height=900)
+            # Summen pro Produkt
+            totals = (
+                product_ranking.groupby(code_col)["chf_num"]
+                .sum()
+                .reset_index()
+            )
+
+            totals["chf_num"] = pd.to_numeric(totals["chf_num"], errors="coerce")
+
+            # Nur Produkte >= 10'000 CHF berücksichtigen
+            totals = totals[totals["chf_num"] >= 10000]
+
+            # Top 20 auswählen
+            top_products = (
+                totals.sort_values("chf_num", ascending=False)
+                .head(20)[code_col]
+            )
+
+            # Filter anwenden
+            product_ranking = product_ranking[product_ranking[code_col].isin(top_products)]
+
+            if product_ranking.empty:
+                LOGGER.warning("No products remain after filtering; showing placeholder")
+                product_fig = build_empty_figure("📦 Trade by Product")
+            else:
+                product_ranking["hs_label"] = product_ranking[code_col] + " – " + product_ranking[desc_col]
+
+                # Kürzen für Anzeige (nur falls nötig)
+                def shorten_text(t, max_len=80):
+                    return t if len(t) <= max_len else t[:max_len] + "..."
+                product_ranking["hs_wrapped"] = product_ranking["hs_label"].apply(shorten_text)
+
+                # Balken-Beschriftungen
+                product_ranking["CHF_label"] = product_ranking["chf_num"].apply(human_format)
+
+                # Titel
+                def format_years(years: list[int]) -> str:
+                    if not years:
+                        return "All Years"
+                    years_sorted = sorted(years)
+                    return ", ".join(str(y) for y in years_sorted)
+
+                def format_countries(countries: list[str]) -> str:
+                    if not countries:
+                        return "LATAM"
+                    return ", ".join(countries)
+
+                years_label = format_years(years)
+                countries_label = format_countries(country)
+
+                # Plot
+                fig = px.bar(
+                    product_ranking,
+                    x="chf_num", y="hs_wrapped",
+                    color="Flow", orientation="h",
+                    title=f"📦 Trade by Product ({countries_label}, {years_label})",
+                    template=GRAPH_STYLE["template"],
+                    color_discrete_map={
+                        "Export": GRAPH_STYLE["color_export"],
+                        "Import": GRAPH_STYLE["color_import"]
+                    },
+                    text="CHF_label",
+                    custom_data=[code_col, desc_col]   # für Hovertext
+                )
+
+                # Hovertext
+                fig.update_traces(
+                    textposition="outside",
+                    insidetextanchor="start",
+                    hovertemplate=(
+                        "<b>Tariff code:</b> %{customdata[0]}<br>"
+                        "<b>Description:</b> %{customdata[1]}<br>"
+                        "<b>Flow:</b> %{fullData.name}<br>"
+                        "<b>CHF:</b> %{text}<extra></extra>"
+                    )
+                )
+
+                # Layout
+                fig.update_layout(
+                    yaxis=dict(categoryorder="total ascending"),
+                    margin=dict(l=400, r=80, t=80, b=80)
+                )
+                product_fig = apply_standard_layout(fig, x_title="CHF", y_title="Product", legend="horizontal", height=900)
+                LOGGER.debug("Product chart prepared with %d products", product_ranking[code_col].nunique())
 
         content = html.Div(
             dcc.Graph(
                 id="product_ranking",
-                figure=fig,
+                figure=product_fig,
                 style={"height": "80vh", "width": "80vw"}
             ),
             style={
@@ -890,6 +1012,186 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
         ])
 
 
+    elif tab == "treemap_hs":
+        if dff_year.empty:
+            LOGGER.warning("Treemap tab has no data; showing placeholder")
+            treemap_fig = build_empty_figure("📂 Treemap")
+        else:
+            treemap_data = (
+                dff_year.groupby(["Flow", "country_en", "HS6_Description"])["chf_num"]
+                .sum()
+                .reset_index()
+            )
+
+            if treemap_data.empty:
+                treemap_fig = build_empty_figure("📂 Treemap")
+            else:
+                top_countries = (
+                    treemap_data.groupby("country_en")["chf_num"].sum().reset_index()
+                    .sort_values("chf_num", ascending=False)
+                    .head(15)["country_en"]
+                )
+                treemap_data = treemap_data[treemap_data["country_en"].isin(top_countries)]
+
+                frames = []
+                for (flow, country_name), group in treemap_data.groupby(["Flow", "country_en"]):
+                    if group.empty:
+                        continue
+                    best = group.nlargest(1, "chf_num")
+                    rest_sum = group["chf_num"].sum() - best["chf_num"].iloc[0]
+                    if rest_sum > 0:
+                        rest = pd.DataFrame([
+                            {
+                                "Flow": flow,
+                                "country_en": country_name,
+                                "HS6_Description": "Other products",
+                                "chf_num": rest_sum,
+                            }
+                        ])
+                        frames.append(pd.concat([best, rest], ignore_index=True))
+                    else:
+                        frames.append(best)
+
+                treemap_top = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+                if treemap_top.empty:
+                    treemap_fig = build_empty_figure("📂 Treemap")
+                else:
+                    treemap_top["HS6_wrapped"] = treemap_top["HS6_Description"].apply(lambda t: wrap_text(t, width=40))
+                    treemap_fig = px.treemap(
+                        treemap_top,
+                        path=["Flow", "country_en", "HS6_wrapped"],
+                        values="chf_num",
+                        color="Flow",
+                        color_discrete_map={
+                            "Export": GRAPH_STYLE["color_export"],
+                            "Import": GRAPH_STYLE["color_import"],
+                        },
+                        title="📂 Treemap: Top Product + Rest per Country",
+                    )
+                    treemap_fig.update_traces(
+                        customdata=treemap_top[["Flow", "country_en"]].values,
+                        hovertemplate=(
+                            "<b>Flow:</b> %{customdata[0]}<br>"
+                            "<b>Country:</b> %{customdata[1]}<br>"
+                            "<b>Product (HS6):</b> %{label}<br>"
+                            "<b>CHF:</b> %{value:,.0f}<extra></extra>"
+                        )
+                    )
+                    treemap_fig.update_layout(uniformtext=dict(minsize=14, mode="show"))
+                    treemap_fig = apply_standard_layout(treemap_fig, legend="horizontal", height=900)
+                    LOGGER.debug("Treemap chart prepared with %d countries", treemap_top["country_en"].nunique())
+
+        content = html.Div(
+            dcc.Graph(
+                id="treemap_graph",
+                figure=treemap_fig,
+                style={"height": "90vh", "width": "90vw"}
+            ),
+            style={
+                "display": "flex",
+                "justifyContent": "center",
+                "alignItems": "center",
+                "padding": "20px",
+            }
+        )
+
+    elif tab == "sankey":
+        if dff_year.empty:
+            LOGGER.warning("Sankey tab has no data; showing placeholder")
+            sankey_fig = build_empty_figure("🌐 Sankey Trade Flow")
+        else:
+            if hs_level == "HS2_Description":
+                code_col, label_col = "HS2", "HS2_Label"
+            elif hs_level == "HS4_Description":
+                code_col, label_col = "HS4", "HS4_Label"
+            elif hs_level == "HS6_Description":
+                code_col, label_col = "HS6", "HS6_Label"
+            else:
+                code_col, label_col = "HS8", "HS8_Label"
+
+            dff_sankey = (
+                dff_year.groupby(["Flow", "country_en", code_col, label_col])["chf_num"]
+                .sum()
+                .reset_index()
+            )
+
+            if dff_sankey.empty:
+                sankey_fig = build_empty_figure("🌐 Sankey Trade Flow")
+            else:
+                all_nodes = (
+                    list(dff_sankey["Flow"].unique())
+                    + list(dff_sankey["country_en"].unique())
+                    + list(dff_sankey[code_col].unique())
+                )
+                node_map = {name: i for i, name in enumerate(all_nodes)}
+
+                sources, targets, values, customdata = [], [], [], []
+                for _, row in dff_sankey.iterrows():
+                    flow_node = node_map[row["Flow"]]
+                    country_node = node_map[row["country_en"]]
+                    product_node = node_map[row[code_col]]
+
+                    sources.append(flow_node)
+                    targets.append(country_node)
+                    values.append(row["chf_num"])
+                    customdata.append(
+                        f"{row['Flow']} → {row['country_en']}<br>CHF {row['chf_num']:,.0f}"
+                    )
+
+                    sources.append(country_node)
+                    targets.append(product_node)
+                    values.append(row["chf_num"])
+                    customdata.append(
+                        f"{row['country_en']} → {row[label_col]}<br>CHF {row['chf_num']:,.0f}"
+                    )
+
+                sankey_fig = go.Figure(
+                    data=[
+                        go.Sankey(
+                            node=dict(
+                                pad=20,
+                                thickness=20,
+                                line=dict(color="black", width=0.5),
+                                label=all_nodes,
+                                color="lightblue",
+                            ),
+                            link=dict(
+                                source=sources,
+                                target=targets,
+                                value=values,
+                                customdata=customdata,
+                                hovertemplate="%{customdata}<extra></extra>",
+                                color="rgba(0,100,200,0.3)",
+                            ),
+                        )
+                    ]
+                )
+                sankey_fig.update_layout(
+                    title="🌐 Trade Sankey Flow (Flow → Country → Product)",
+                    font=dict(size=14, family=GRAPH_STYLE["font_family"]),
+                )
+                LOGGER.debug(
+                    "Sankey chart prepared with %d nodes and %d links",
+                    len(all_nodes),
+                    len(values),
+                )
+
+        content = html.Div(
+            dcc.Graph(
+                id="sankey_graph",
+                figure=sankey_fig,
+                style={"height": "90vh", "width": "90vw"}
+            ),
+            style={
+                "display": "flex",
+                "justifyContent": "center",
+                "alignItems": "center",
+                "padding": "20px",
+            }
+        )
+
+
     return kpis, content
 
 @app.callback(
@@ -901,102 +1203,110 @@ def update_dashboard(year, country, hs_level, product, tab, lang):
 
 
 def update_country_products(selected_countries, years, top_n):
-
-    dff_tab = get_filtered_data(years, selected_countries, "HS6_Description", None)
-    # Filter auf positive Werte
-    dff_tab = dff_tab[dff_tab["chf_num"] > 0]
     years = [int(y) for y in years] if years else []
-    top_n = int(top_n)
+    top_n = int(top_n) if top_n else 5
 
+    LOGGER.debug(
+        "update_country_products called | countries=%s years=%s top_n=%d",
+        selected_countries if selected_countries else "ALL",
+        years if years else "ALL",
+        top_n,
+    )
 
-    # Basisdaten: Land x Flow x Produkt
+    dff_tab = get_filtered_data(years if years else None, selected_countries, "HS6_Description", None)
+    dff_tab = dff_tab[dff_tab["chf_num"] > 0]
+    log_dataframe_snapshot("Country products base", dff_tab)
+
+    if dff_tab.empty:
+        return html.Div(
+            "No data available for the selected filters.",
+            style={"padding": "20px", "fontStyle": "italic"}
+        )
+
     data = (
         dff_tab.groupby(["country_en", "Flow", "HS6_Description"])["chf_num"]
         .sum()
         .reset_index()
     )
 
-    # Falls kein Land gewählt → alle Länder anzeigen
-    if selected_countries:
-        countries = selected_countries
-    else:
-        countries = sorted(data["country_en"].unique())
+    if data.empty:
+        return html.Div(
+            "No data available after aggregation.",
+            style={"padding": "20px", "fontStyle": "italic"}
+        )
 
+    countries = selected_countries or sorted(data["country_en"].unique())
+
+    def format_years_label(values: list[int]) -> str:
+        if not values:
+            return "All years"
+        if len(values) == 1:
+            return str(values[0])
+        return f"{min(values)}–{max(values)}"
+
+    years_label = format_years_label(years)
     rows = []
     for c in countries:
+        col_export = dcc.Graph(figure=build_empty_figure(f"Top {top_n} Exports – {c} ({years_label})"))
+        col_import = dcc.Graph(figure=build_empty_figure(f"Top {top_n} Imports – {c} ({years_label})"))
+
         for flow in ["Export", "Import"]:
             df_flow = (
                 data[(data["country_en"] == c) & (data["Flow"] == flow)]
                 .nlargest(top_n, "chf_num")
                 .copy()
             )
-            df_flow["HS6_wrapped"] = df_flow["HS6_Description"].apply(lambda t: wrap_and_shorten(t, 30, 60))
 
-            # 🔹 Titel dynamisch: Top-N, Flow, Land, Jahr(e)
-            years_label = f"{min(years)}–{max(years)}" if len(years) > 1 else str(years[0])
-            title = f"Top {top_n} {flow}s – {c} ({years_label})"
-
-            fig = px.bar(
-                df_flow,
-                x="chf_num", y="HS6_wrapped",
-                orientation="h",
-                title=title,
-                template=GRAPH_STYLE["template"],
-                color_discrete_sequence=[GRAPH_STYLE["color_export"]] if flow == "Export" else [GRAPH_STYLE["color_import"]],
-                text=df_flow["chf_num"].apply(human_format)
-            )
-            fig.update_traces(
-                textposition="outside",
-                insidetextanchor="start",
-                cliponaxis=False,   # verhindert, dass Texte abgeschnitten werden
-                hovertemplate=(  # <<<<< HIER
-                    "<b>Product:</b> %{y}<br>"
-                    "<b>CHF:</b> %{text}<extra></extra>"  # <--- HIER
-            )
-            )
-
-
-            fig.update_layout(
-                yaxis=dict(categoryorder="total ascending", title="Produkt"),
-                xaxis=dict(title="CHF"),
-                margin=dict(l=300, r=120, t=80, b=80)  # mehr Platz links/rechts/unten
-            )
-
-            # Anzahl Produkte für diese Grafik
-            n_products = len(df_flow)
-            height = max(450, n_products * 40)
-
-            fig.update_layout(
-                yaxis=dict(categoryorder="total ascending", title="Produkt"),
-                xaxis=dict(title="CHF"),
-                margin=dict(l=250, r=50, t=80, b=50)
-            )
-
-            fig.update_yaxes(
-                automargin=True,
-                tickfont=dict(size=14)
-            )
-
-            fig = apply_standard_layout(fig, legend=False, height=height)
-
-
-            if flow == "Export":
-                col_export = dcc.Graph(figure=fig)
+            if df_flow.empty:
+                LOGGER.debug("No %s data for country %s", flow, c)
+                fig = build_empty_figure(f"Top {top_n} {flow}s – {c} ({years_label})")
             else:
-                col_import = dcc.Graph(figure=fig)
+                df_flow["HS6_wrapped"] = df_flow["HS6_Description"].apply(lambda t: wrap_and_shorten(t, 30, 60))
+                title = f"Top {top_n} {flow}s – {c} ({years_label})"
+                fig = px.bar(
+                    df_flow,
+                    x="chf_num", y="HS6_wrapped",
+                    orientation="h",
+                    title=title,
+                    template=GRAPH_STYLE["template"],
+                    color_discrete_sequence=[
+                        GRAPH_STYLE["color_export"] if flow == "Export" else GRAPH_STYLE["color_import"]
+                    ],
+                    text=df_flow["chf_num"].apply(human_format)
+                )
+                fig.update_traces(
+                    textposition="outside",
+                    insidetextanchor="start",
+                    cliponaxis=False,
+                    hovertemplate=(
+                        "<b>Product:</b> %{y}<br>"
+                        "<b>CHF:</b> %{text}<extra></extra>"
+                    )
+                )
+                n_products = len(df_flow)
+                height = max(450, n_products * 40)
+                fig.update_layout(
+                    yaxis=dict(categoryorder="total ascending", title="Product"),
+                    xaxis=dict(title="CHF"),
+                    margin=dict(l=250, r=50, t=80, b=50)
+                )
+                fig.update_yaxes(automargin=True, tickfont=dict(size=14))
+                fig = apply_standard_layout(fig, legend=False, height=height)
 
-        # Eine Zeile: Ländername + Export + Import nebeneinander
-        # Eine Zeile: Ländername + Export + Import nebeneinander
+            graph_component = dcc.Graph(figure=fig)
+            if flow == "Export":
+                col_export = graph_component
+            else:
+                col_import = graph_component
+
         row = html.Div([
-            # feste Breite für die Länder-Spalte
             html.Div(
                 html.H4(c, style={"textAlign": "left", "fontSize": "20px"}),
-                style={"flex": "0 0 220px", "padding": "10px"}   # <-- feste Breite
+                style={"flex": "0 0 220px", "padding": "10px"}
             ),
             html.Div(col_export, style={"flex": "2", "padding": "20px"}),
             html.Div(col_import, style={"flex": "2", "padding": "20px"})
         ], style={"display": "flex", "gap": "10px", "margin": "50px"})
-
 
         rows.append(row)
 
@@ -1009,24 +1319,32 @@ def update_country_products(selected_countries, years, top_n):
 )
 
 def update_trend_hs(country, hs_level):
+    LOGGER.debug("update_trend_hs called | countries=%s hs_level=%s", country if country else "ALL", hs_level)
 
-    # hier bewusst keine Produkte → nur Country-Filter
     dff_hs = get_filtered_data(None, country, hs_level, None)
-    all_years = df["year"].dropna().unique()
+    log_dataframe_snapshot("Trend HS base", dff_hs)
+
+    if dff_hs.empty:
+        empty = dcc.Graph(figure=build_empty_figure("📈 Trade Trend per Product"))
+        return html.Div([empty], style={"padding": "20px"})
+
+    all_years = dff_hs["year"].dropna().unique()
+    if all_years.size == 0:
+        empty = dcc.Graph(figure=build_empty_figure("📈 Trade Trend per Product"))
+        return html.Div([empty], style={"padding": "20px"})
+
     min_year, max_year = int(all_years.min()), int(all_years.max())
 
-    dff_hs = df[(df["year"] >= min_year) & (df["year"] <= max_year)].copy()
-    if country:
-        dff_hs = dff_hs[dff_hs["country_en"].isin(country)]
-
-    # Gruppierung nach Jahr + Flow + HS-Description
     trend_hs = (
         dff_hs.groupby(["year", hs_level, "Flow"])["chf_num"]
         .sum()
         .reset_index()
     )
 
-    # Kürzen für Legende (nicht umbrechen, nur abschneiden)
+    if trend_hs.empty:
+        empty = dcc.Graph(figure=build_empty_figure("📈 Trade Trend per Product"))
+        return html.Div([empty], style={"padding": "20px"})
+
     def shorten_text(t, max_len=50):
         if not isinstance(t, str):
             return ""
@@ -1034,8 +1352,8 @@ def update_trend_hs(country, hs_level):
 
     trend_hs["hs_label"] = trend_hs[hs_level].apply(shorten_text)
 
-    # ===================== Exporte =====================
     df_exp = trend_hs[trend_hs["Flow"] == "Export"]
+    df_imp = trend_hs[trend_hs["Flow"] == "Import"]
 
     fig_exp = px.line(
         df_exp,
@@ -1047,7 +1365,7 @@ def update_trend_hs(country, hs_level):
         template=GRAPH_STYLE["template"]
     )
     fig_exp.update_traces(
-        marker=dict(size=10),  # Punkte größer
+        marker=dict(size=10),
         hovertemplate=(
             "<b>Year:</b> %{x}<br>"
             "<b>Description:</b> %{fullData.name}<br>"
@@ -1055,9 +1373,6 @@ def update_trend_hs(country, hs_level):
         )
     )
     fig_exp = apply_standard_layout(fig_exp, "Year", "CHF", legend="bottom_outside", height=900)
-
-    # ===================== Importe =====================
-    df_imp = trend_hs[trend_hs["Flow"] == "Import"]
 
     fig_imp = px.line(
         df_imp,
@@ -1078,6 +1393,12 @@ def update_trend_hs(country, hs_level):
     )
     fig_imp = apply_standard_layout(fig_imp, "Year", "CHF", legend="bottom_outside", height=900)
 
+    LOGGER.debug(
+        "Trend HS charts prepared | export_traces=%d import_traces=%d",
+        len(fig_exp.data),
+        len(fig_imp.data),
+    )
+
     return html.Div([
         html.Div(dcc.Graph(figure=fig_exp), style={"flex": "1"}),
         html.Div(dcc.Graph(figure=fig_imp), style={"flex": "1"})
@@ -1094,6 +1415,8 @@ def update_product_options(hs_level):
     if not hs_level:  
        hs_level = "HS6_Description"   # Fallback erzwingen
 
+    LOGGER.debug("update_product_options called | hs_level=%s", hs_level)
+
 
     if hs_level == "HS2_Description":
         df_temp = df[["HS2", "HS2_Label"]].drop_duplicates().sort_values("HS2")
@@ -1108,6 +1431,7 @@ def update_product_options(hs_level):
         df_temp = df[["HS8", "HS8_Label"]].drop_duplicates().sort_values("HS8")
         options = [{"label": row["HS8_Label"], "value": row["HS8"]} for _, row in df_temp.iterrows()]
 
+    LOGGER.debug("Prepared %d options for hs_level %s", len(options), hs_level)
     return options
 
 
@@ -1120,13 +1444,15 @@ def update_tabs(lang):
     if not lang:
        lang = "en"  # Fallback erzwingen
     labels = LANG.get(lang, LANG["en"])
-    labels = LANG.get(lang, LANG["en"])
+    LOGGER.debug("update_tabs called | lang=%s", lang)
     return [
         dcc.Tab(label=labels["tab_trend"], value="trend"),
         dcc.Tab(label=labels["tab_country"], value="country"),
         dcc.Tab(label=labels["tab_product"], value="product"),
         dcc.Tab(label=labels["tab_country_products"], value="country_products"),
         dcc.Tab(label=labels["tab_trend_hs"], value="trend_hs"),
+        dcc.Tab(label=labels["tab_treemap"], value="treemap_hs"),
+        dcc.Tab(label=labels["tab_sankey"], value="sankey"),
     ]
 
 @app.callback(
@@ -1141,6 +1467,7 @@ def update_filter_labels(lang):
     if not lang:
         lang = "en"
     labels = LANG.get(lang, LANG["en"])
+    LOGGER.debug("update_filter_labels called | lang=%s", lang)
     return (labels["label_language"],
             labels["label_year"],
             labels["label_country"],
